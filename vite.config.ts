@@ -10,6 +10,10 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
+      // 排除独立 HTML 文件，避免 esbuild 扫描其内联脚本报错
+      optimizeDeps: {
+        entries: ['index.html'],
+      },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)

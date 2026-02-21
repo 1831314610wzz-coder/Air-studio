@@ -377,6 +377,8 @@ const App: React.FC = () => {
     const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
     const [selectionBox, setSelectionBox] = useState<Rect | null>(null);
     const [prompt, setPrompt] = useState('');
+    // @ 引用元素 id 列表（由 PromptBar 在用户点击生成前同步过来）
+    const [mentionedElementIds, setMentionedElementIds] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -1500,6 +1502,11 @@ const App: React.FC = () => {
         try {
             const isEditing = selectedElementIds.length > 0;
 
+            // Collect @mention reference images (只取图片类元素，排除已在 selection 中的)
+            const mentionedImageElements = mentionedElementIds
+                .map(id => elements.find(el => el.id === id))
+                .filter((el): el is ImageElement => !!el && el.type === 'image' && !selectedElementIds.includes(el.id));
+
             if (isEditing) {
                 const selectedElements = elements.filter(el => selectedElementIds.includes(el.id));
                 const imageElements = selectedElements.filter(el => el.type === 'image') as ImageElement[];
@@ -1545,14 +1552,17 @@ const App: React.FC = () => {
                     return; // End execution for inpainting path
                 }
                 
-                // Regular edit/combine logic
+                // Regular edit/combine logic (append @mention refs at the end)
                 const imagePromises = selectedElements.map(el => {
                     if (el.type === 'image') return Promise.resolve({ href: el.href, mimeType: el.mimeType });
                     if (el.type === 'video') return Promise.reject(new Error("Cannot use video elements in image generation."));
                     return rasterizeElement(el as Exclude<Element, ImageElement | VideoElement>);
                 });
                 const imagesToProcess = await Promise.all(imagePromises);
-                const result = await editImage(imagesToProcess, prompt);
+
+                // Append @mentioned reference images
+                const mentionRefs = mentionedImageElements.map(el => ({ href: el.href, mimeType: el.mimeType }));
+                const result = await editImage([...imagesToProcess, ...mentionRefs], prompt);
 
                 if (result.newImageBase64 && result.newImageMimeType) {
                     const { newImageBase64, newImageMimeType } = result;
@@ -1569,6 +1579,36 @@ const App: React.FC = () => {
                         const x = maxX + 20;
                         const y = minY;
                         
+                        const newImage: ImageElement = {
+                            id: generateId(), type: 'image', x, y, name: 'Generated Image',
+                            width: img.width, height: img.height,
+                            href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                        };
+                        commitAction(prev => [...prev, newImage]);
+                        setSelectedElementIds([newImage.id]);
+                    };
+                    img.onerror = () => setError('Failed to load the generated image.');
+                    img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
+                } else {
+                    setError(result.textResponse || 'Generation failed to produce an image.');
+                }
+
+            } else if (mentionedImageElements.length > 0) {
+                // No canvas selection, but user @mentioned image elements → use editImage as reference-guided generation
+                setProgressMessage('Generating with reference images...');
+                const mentionRefs = mentionedImageElements.map(el => ({ href: el.href, mimeType: el.mimeType }));
+                const result = await editImage(mentionRefs, prompt);
+
+                if (result.newImageBase64 && result.newImageMimeType) {
+                    const { newImageBase64, newImageMimeType } = result;
+                    const img = new Image();
+                    img.onload = () => {
+                        if (!svgRef.current) return;
+                        const svgBounds = svgRef.current.getBoundingClientRect();
+                        const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
+                        const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
+                        const x = canvasPoint.x - (img.width / 2);
+                        const y = canvasPoint.y - (img.height / 2);
                         const newImage: ImageElement = {
                             id: generateId(), type: 'image', x, y, name: 'Generated Image',
                             width: img.width, height: img.height,
@@ -2489,6 +2529,8 @@ const App: React.FC = () => {
                 setGenerationMode={setGenerationMode}
                 videoAspectRatio={videoAspectRatio}
                 setVideoAspectRatio={setVideoAspectRatio}
+                canvasElements={elements}
+                onMentionedElementIds={setMentionedElementIds}
                 />
             </div>}
         </div>
