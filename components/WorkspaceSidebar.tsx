@@ -414,7 +414,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
     return (
         <div
-            className="fixed inset-y-4 left-4 z-[45] w-64 overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_30px_70px_rgba(15,23,42,0.18)] transition-all duration-300"
+            className="theme-aware fixed inset-y-4 left-4 z-[45] w-64 overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_30px_70px_rgba(15,23,42,0.18)] transition-all duration-300"
             style={{
                 transform: isOpen ? 'translateX(0)' : 'translateX(calc(-100% - 20px))',
                 opacity: isOpen ? 1 : 0,

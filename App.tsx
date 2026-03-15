@@ -10,7 +10,7 @@ import { PromptBar } from './components/PromptBar';
 import { Loader } from './components/Loader';
 import { CanvasSettings } from './components/CanvasSettings';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
-import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, UserEffect, LineElement, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem } from './types';
+import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, UserEffect, LineElement, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode } from './types';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { InspirationPanel } from './components/InspirationPanel';
 import { RightPanel } from './components/RightPanel';
@@ -372,6 +372,21 @@ const TEXT_MODEL_OPTIONS = ['gemini-2.5-pro', 'gpt-4o-mini', 'claude-3-5-sonnet'
 const IMAGE_MODEL_OPTIONS = ['gemini-2.5-flash-image-preview', 'imagen-4.0-generate-001', 'dall-e-3', 'sdxl'];
 const VIDEO_MODEL_OPTIONS = ['veo-2.0-generate-001'];
 
+const THEME_PALETTES = {
+    light: {
+        appBackground: '#f3f5f9',
+        canvasBackground: '#f7f8fb',
+        uiBgColor: 'rgba(255, 255, 255, 0.92)',
+        buttonBgColor: '#111827',
+    },
+    dark: {
+        appBackground: '#0c0f14',
+        canvasBackground: '#11151c',
+        uiBgColor: 'rgba(18, 21, 27, 0.94)',
+        buttonBgColor: '#f3f4f6',
+    },
+} as const;
+
 const inferCapabilitiesByProvider = (provider: AIProvider): AICapability[] => {
     switch (provider) {
         case 'google':
@@ -421,9 +436,11 @@ const App: React.FC = () => {
     });
     const [activeBoardId, setActiveBoardId] = useState<string>(boards[0].id);
 
-    const activeBoard = useMemo(() => boards.find(b => b.id === activeBoardId)!, [boards, activeBoardId]);
+    const activeBoard = useMemo(() => {
+        return boards.find(b => b.id === activeBoardId) ?? boards[0];
+    }, [boards, activeBoardId]);
 
-    const { elements, history, historyIndex, panOffset, zoom, canvasBackgroundColor } = activeBoard;
+    const { elements, history, historyIndex, panOffset, zoom } = activeBoard;
 
     const [activeTool, setActiveTool] = useState<Tool>('select');
     const [drawingOptions, setDrawingOptions] = useState({ strokeColor: '#111827', strokeWidth: 5 });
@@ -464,12 +481,43 @@ const App: React.FC = () => {
     useEffect(() => {
         localStorage.setItem('inspirationPanelMinimized', isInspirationMinimized.toString());
     }, [isInspirationMinimized]);
+    
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const updateTheme = (event?: MediaQueryListEvent) => {
+            setSystemTheme((event ? event.matches : media.matches) ? 'dark' : 'light');
+        };
+
+        updateTheme();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', updateTheme);
+            return () => media.removeEventListener('change', updateTheme);
+        }
+
+        media.addListener(updateTheme);
+        return () => media.removeListener(updateTheme);
+    }, []);
+
     const [editingElement, setEditingElement] = useState<{ id: string; text: string; } | null>(null);
     const [lassoPath, setLassoPath] = useState<Point[] | null>(null);
 
     const [language, setLanguage] = useState<'en' | 'zho'>('en');
-    const [uiTheme, setUiTheme] = useState({ color: '#FFFFFF', opacity: 0.9 });
-    const [buttonTheme, setButtonTheme] = useState({ color: '#111827', opacity: 1 });
+    const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+        try {
+            const saved = localStorage.getItem('themeMode.v1');
+            return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+        } catch {
+            return 'system';
+        }
+    });
+    const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
+        if (typeof window === 'undefined') return 'light';
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    });
+    useEffect(() => {
+        localStorage.setItem('themeMode.v1', themeMode);
+    }, [themeMode]);
     const [userApiKeys, setUserApiKeys] = useState<UserApiKey[]>(() => {
         try {
             const raw = localStorage.getItem('userApiKeys.v1');
@@ -517,6 +565,10 @@ const App: React.FC = () => {
     const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16'>('16:9');
     const [progressMessage, setProgressMessage] = useState<string>('');
 
+    const resolvedTheme = themeMode === 'system' ? systemTheme : themeMode;
+    const themePalette = THEME_PALETTES[resolvedTheme];
+    const canvasBackgroundColor = themePalette.canvasBackground;
+
     const interactionMode = useRef<string | null>(null);
     const startPoint = useRef<Point>({ x: 0, y: 0 });
     const currentDrawingElementId = useRef<string | null>(null);
@@ -537,6 +589,13 @@ const App: React.FC = () => {
         setSelectionBox(null);
         setPrompt('');
     }, [activeBoardId]);
+
+    useEffect(() => {
+        if (!boards.length) return;
+        if (!boards.some(board => board.id === activeBoardId)) {
+            setActiveBoardId(boards[0].id);
+        }
+    }, [boards, activeBoardId]);
     
     useEffect(() => {
         try {
@@ -804,18 +863,11 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const root = document.documentElement;
-        const hex = uiTheme.color.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        root.style.setProperty('--ui-bg-color', `rgba(${r}, ${g}, ${b}, ${uiTheme.opacity})`);
-
-        const btnHex = buttonTheme.color.replace('#', '');
-        const btnR = parseInt(btnHex.substring(0, 2), 16);
-        const btnG = parseInt(btnHex.substring(2, 4), 16);
-        const btnB = parseInt(btnHex.substring(4, 6), 16);
-        root.style.setProperty('--button-bg-color', `rgba(${btnR}, ${btnG}, ${btnB}, ${buttonTheme.opacity})`);
-    }, [uiTheme, buttonTheme]);
+        root.dataset.theme = resolvedTheme;
+        root.style.setProperty('--ui-bg-color', themePalette.uiBgColor);
+        root.style.setProperty('--button-bg-color', themePalette.buttonBgColor);
+        document.body.style.backgroundColor = themePalette.appBackground;
+    }, [resolvedTheme, themePalette]);
 
     // (moved below commitAction)
 
@@ -2541,18 +2593,15 @@ const App: React.FC = () => {
     
     const handleDeleteBoard = (boardId: string) => {
         if (boards.length <= 1) return; // Can't delete the last board
-        setBoards(prev => prev.filter(b => b.id !== boardId));
-        if (activeBoardId === boardId) {
-            setActiveBoardId(boards.find(b => b.id !== boardId)!.id);
+        const nextBoards = boards.filter(board => board.id !== boardId);
+        setBoards(nextBoards);
+        if (activeBoardId === boardId && nextBoards.length > 0) {
+            setActiveBoardId(nextBoards[0].id);
         }
     };
     
     const handleRenameBoard = (boardId: string, name: string) => {
         setBoards(prev => prev.map(b => b.id === boardId ? { ...b, name } : b));
-    };
-
-    const handleCanvasBackgroundColorChange = (color: string) => {
-        updateActiveBoard(b => ({ ...b, canvasBackgroundColor: color }));
     };
 
     const generateBoardThumbnail = useCallback((elements: Element[], bgColor: string): string => {
@@ -2602,7 +2651,7 @@ const App: React.FC = () => {
     }, []);
 
     return (
-        <div className="w-screen h-screen flex flex-col font-sans" style={{ backgroundColor: canvasBackgroundColor }} onDragOver={handleDragOver} onDrop={handleDrop}>
+        <div className="theme-aware w-screen h-screen flex flex-col font-sans" style={{ backgroundColor: themePalette.appBackground }} onDragOver={handleDragOver} onDrop={handleDrop}>
             {isLoading && <Loader progressMessage={progressMessage} />}
             {error && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
@@ -2622,7 +2671,7 @@ const App: React.FC = () => {
                 onRenameBoard={handleRenameBoard}
                 onDuplicateBoard={handleDuplicateBoard}
                 onDeleteBoard={handleDeleteBoard}
-                generateBoardThumbnail={(els) => generateBoardThumbnail(els, activeBoard.canvasBackgroundColor)}
+                generateBoardThumbnail={(els) => generateBoardThumbnail(els, canvasBackgroundColor)}
                 elements={elements}
                 selectedElementIds={selectedElementIds}
                 onSelectElement={id => setSelectedElementIds(id ? [id] : [])}
@@ -2650,6 +2699,7 @@ const App: React.FC = () => {
             />
             {/* New Right Panel (multi-function: generate + inspiration) */}
             <RightPanel
+                theme={resolvedTheme}
                 isMinimized={isInspirationMinimized}
                 onToggleMinimize={() => setIsInspirationMinimized(prev => !prev)}
                 library={assetLibrary}
@@ -2668,14 +2718,11 @@ const App: React.FC = () => {
             <CanvasSettings 
                 isOpen={isSettingsPanelOpen} 
                 onClose={() => setIsSettingsPanelOpen(false)} 
-                canvasBackgroundColor={canvasBackgroundColor} 
-                onCanvasBackgroundColorChange={handleCanvasBackgroundColorChange}
                 language={language}
                 setLanguage={setLanguage}
-                uiTheme={uiTheme}
-                setUiTheme={setUiTheme}
-                buttonTheme={buttonTheme}
-                setButtonTheme={setButtonTheme}
+                themeMode={themeMode}
+                resolvedTheme={resolvedTheme}
+                setThemeMode={setThemeMode}
                 wheelAction={wheelAction}
                 setWheelAction={setWheelAction}
                 userApiKeys={userApiKeys}
@@ -2688,6 +2735,7 @@ const App: React.FC = () => {
             />
             <Toolbar
                 t={t}
+                theme={resolvedTheme}
                 activeTool={activeTool}
                 setActiveTool={setActiveTool}
                 drawingOptions={drawingOptions}
@@ -3122,6 +3170,7 @@ const App: React.FC = () => {
                     <div className="pointer-events-auto w-[90%] max-w-4xl transition-transform hover:-translate-y-1 duration-300 drop-shadow-2xl">
                         <PromptBar 
                             t={t}
+                            theme={resolvedTheme}
                             prompt={prompt} 
                             setPrompt={setPrompt} 
                             onGenerate={handleGenerate} 

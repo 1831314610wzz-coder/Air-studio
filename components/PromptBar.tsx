@@ -10,6 +10,7 @@ import type {
 
 interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
+    theme: 'light' | 'dark';
     prompt: string;
     setPrompt: (prompt: string) => void;
     onGenerate: () => void;
@@ -89,8 +90,8 @@ function getModelLabel(mode: GenerationMode, imageModel?: string, videoModel?: s
 
 const PopoverHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
     <div className="px-2 pb-2">
-        <div className="text-sm font-semibold text-[#111827]">{title}</div>
-        {subtitle && <div className="mt-0.5 text-xs text-[#667085]">{subtitle}</div>}
+        <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
+        {subtitle && <div className="mt-0.5 text-xs text-[var(--text-muted)]">{subtitle}</div>}
     </div>
 );
 
@@ -104,12 +105,12 @@ const MenuOptionButton: React.FC<{
         type="button"
         onClick={onClick}
         className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left transition ${
-            active ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F4F6FA]'
+            active ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-muted)]'
         }`}
     >
         <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{label}</span>
-            {description && <span className="mt-0.5 block text-xs text-[#667085]">{description}</span>}
+            {description && <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{description}</span>}
         </span>
         {active && (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
@@ -121,6 +122,7 @@ const MenuOptionButton: React.FC<{
 
 export const PromptBar: React.FC<PromptBarProps> = ({
     t,
+    theme,
     prompt,
     setPrompt,
     onGenerate,
@@ -152,6 +154,26 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     activeCharacterLockId = null,
     onSetActiveCharacterLock,
 }) => {
+    const isDark = theme === 'dark';
+    const triggerClass =
+        `inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition ${
+            isDark
+                ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]'
+                : 'border-[#E5E7EB] bg-[#F5F7FA] text-[#344054] hover:border-[#D0D5DD] hover:bg-white'
+        }`;
+    const activeTriggerClass = isDark
+        ? 'border-[#4B5B78] bg-[#202734] text-white shadow-sm'
+        : 'border-[#D0D5DD] bg-white text-[#111827] shadow-sm';
+    const popoverCardClass =
+        `absolute bottom-full left-0 z-[80] mb-3 min-w-[240px] rounded-[22px] border p-2 shadow-[0_26px_60px_rgba(15,23,42,0.16)] ${
+            isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E5E7EB] bg-white'
+        }`;
+    const shellClass = isDark
+        ? 'border-[#2A3140] bg-[#12151B] shadow-[0_24px_60px_rgba(0,0,0,0.28)]'
+        : 'border-[#E4E7EC] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.12)]';
+    const textareaClass = isDark
+        ? 'min-h-[128px] w-full resize-none border-none bg-transparent px-0 py-0 text-[20px] leading-8 text-[#F3F4F6] outline-none placeholder:text-[#667085]'
+        : 'min-h-[128px] w-full resize-none border-none bg-transparent px-0 py-0 text-[20px] leading-8 text-[#111827] outline-none placeholder:text-[#C2CAD7]';
     const rootRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
@@ -314,8 +336,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     ];
 
     return (
-        <div ref={rootRef} className="w-full">
-            <div className="overflow-visible rounded-[30px] border border-[#E4E7EC] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+        <div ref={rootRef} className="theme-aware w-full">
+            <div className={`overflow-visible rounded-[30px] border ${shellClass}`}>
                 <div className="relative px-5 pt-5">
                     <textarea
                         ref={textareaRef}
@@ -351,12 +373,14 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             }
                         }}
                         placeholder={placeholder}
-                        className="min-h-[128px] w-full resize-none border-none bg-transparent px-0 py-0 text-[20px] leading-8 text-[#111827] outline-none placeholder:text-[#C2CAD7]"
+                        className={textareaClass}
                     />
 
                     {mentionState && filteredMentions.length > 0 && (
-                        <div className="absolute left-0 top-[calc(100%_-_8px)] z-30 w-[300px] rounded-[22px] border border-[#E4E7EC] bg-white p-2 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
-                            <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#98A2B3]">
+                        <div className={`absolute left-0 top-[calc(100%_-_8px)] z-30 w-[300px] rounded-[22px] border p-2 shadow-[0_24px_60px_rgba(15,23,42,0.16)] ${
+                            isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-white'
+                        }`}>
+                            <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
                                 Whiteboard Elements
                             </div>
                             <div className="space-y-1">
@@ -369,7 +393,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             insertMention(item);
                                         }}
                                         className={`flex w-full items-center rounded-2xl px-3 py-2.5 text-left text-sm transition ${
-                                            index === mentionIndex ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F4F6FA]'
+                                            index === mentionIndex ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-muted)]'
                                         }`}
                                     >
                                         @{item.label}
@@ -380,9 +404,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     )}
                 </div>
 
-                <div className="flex items-center justify-between gap-4 border-t border-[#EEF1F5] px-4 py-4">
-                    <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        <div className="flex min-w-max items-center gap-2">
+                <div className={`relative flex items-center justify-between gap-4 border-t px-4 py-4 ${
+                    isDark ? 'border-[#2A3140]' : 'border-[#EEF1F5]'
+                }`}>
+                    <div className="min-w-0 flex-1 overflow-visible">
+                        <div className="flex flex-wrap items-center gap-2">
                             <div className="relative">
                                 <button
                                     type="button"
@@ -535,10 +561,12 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             onClick={() => setStylePreset(option.id)}
                                                             className={`rounded-2xl border px-3 py-2 text-sm transition ${
                                                                 stylePreset === option.id
-                                                                    ? 'border-[#B2CCFF] bg-[#EEF4FF] text-[#175CD3]'
-                                                                    : 'border-[#E5E7EB] bg-[#F9FAFB] text-[#344054] hover:bg-white'
-                                                            }`}
-                                                        >
+                                                                    ? 'border-[#B2CCFF] bg-[var(--accent-bg)] text-[var(--accent-text)]'
+                                                                    : isDark
+                                                                        ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]'
+                                                                        : 'border-[#E5E7EB] bg-[#F9FAFB] text-[#344054] hover:bg-white'
+                                                                }`}
+                                                            >
                                                             {option.label}
                                                         </button>
                                                     ))}
@@ -551,7 +579,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 type="button"
                                                 onClick={handleEnhance}
                                                 disabled={isEnhancingPrompt || !prompt.trim()}
-                                                className="w-full rounded-2xl bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#0F172A] disabled:cursor-not-allowed disabled:bg-[#D0D5DD]"
+                                                className={`w-full rounded-2xl px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed ${
+                                                    isDark
+                                                        ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]'
+                                                        : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'
+                                                }`}
                                             >
                                                 {isEnhancingPrompt ? '润色中...' : '立即润色'}
                                             </button>
@@ -611,8 +643,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             />
 
                                             {canvasElements.length > 0 && (
-                                                <div className="rounded-2xl bg-[#F9FAFB] px-3 py-3 text-sm text-[#667085]">
-                                                    在输入框里输入 <span className="font-semibold text-[#344054]">@</span>，可以直接引用白板里的元素。
+                                                <div className={`rounded-2xl px-3 py-3 text-sm ${isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F9FAFB] text-[#667085]'}`}>
+                                                    在输入框里输入 <span className={`font-semibold ${isDark ? 'text-[#F3F4F6]' : 'text-[#344054]'}`}>@</span>，可以直接引用白板里的元素。
                                                 </div>
                                             )}
                                         </div>
@@ -628,7 +660,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         disabled={isLoading || !prompt.trim()}
                         aria-label={t('promptBar.generate')}
                         title={t('promptBar.generate')}
-                        className="flex h-12 min-w-[88px] items-center justify-center rounded-2xl bg-[#111827] px-4 text-white transition hover:bg-[#0F172A] disabled:cursor-not-allowed disabled:bg-[#D0D5DD]"
+                        className={`flex h-12 min-w-[88px] items-center justify-center rounded-2xl px-4 transition disabled:cursor-not-allowed ${
+                            isDark
+                                ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]'
+                                : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'
+                        }`}
                     >
                         {isLoading ? (
                             <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -649,20 +685,22 @@ export const PromptBar: React.FC<PromptBarProps> = ({
             </div>
 
             {(enhanceResult || enhanceError) && (
-                <div className="mt-3 rounded-[24px] border border-[#E4E7EC] bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+                <div className={`mt-3 rounded-[24px] border p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)] ${
+                    isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'
+                }`}>
                     {enhanceError && <div className="text-sm text-rose-500">{enhanceError}</div>}
 
                     {enhanceResult && (
                         <>
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#98A2B3]">AI Prompt Assist</div>
-                            <div className="mt-2 text-sm leading-7 text-[#344054]">{enhanceResult.enhancedPrompt}</div>
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">AI Prompt Assist</div>
+                            <div className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">{enhanceResult.enhancedPrompt}</div>
 
                             {enhanceResult.suggestions.length > 0 && (
                                 <div className="mt-3 flex flex-wrap gap-2">
                                     {enhanceResult.suggestions.map((item, index) => (
                                         <span
                                             key={`${item}-${index}`}
-                                            className="rounded-full border border-[#E6EAF0] bg-[#F4F6FA] px-3 py-1.5 text-xs text-[#667085]"
+                                            className="rounded-full border border-[var(--border-color)] bg-[var(--panel-muted)] px-3 py-1.5 text-xs text-[var(--text-muted)]"
                                         >
                                             {item}
                                         </span>
@@ -674,7 +712,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleApplyEnhancedPrompt}
-                                    className="rounded-full bg-[#111827] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#0F172A]"
+                                    className={`rounded-full px-4 py-2 text-xs font-medium transition ${
+                                        isDark ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white' : 'bg-[#111827] text-white hover:bg-[#0F172A]'
+                                    }`}
                                 >
                                     采用润色结果
                                 </button>

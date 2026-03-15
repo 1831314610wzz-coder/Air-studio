@@ -139,6 +139,7 @@ export interface GenerationHistoryItem {
 }
 
 // API Key & Model Preferences
+export type ThemeMode = 'light' | 'dark' | 'system';
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'stability' | 'qwen' | 'banana' | 'custom';
 export type AICapability = 'text' | 'image' | 'video' | 'agent';
 

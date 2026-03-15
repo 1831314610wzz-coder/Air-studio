@@ -1,17 +1,14 @@
 import React from 'react';
-import type { WheelAction, UserApiKey, ModelPreference, AIProvider, AICapability } from '../types';
+import type { WheelAction, UserApiKey, ModelPreference, AIProvider, AICapability, ThemeMode } from '../types';
 
 interface CanvasSettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    canvasBackgroundColor: string;
-    onCanvasBackgroundColorChange: (color: string) => void;
     language: 'en' | 'zho';
     setLanguage: (lang: 'en' | 'zho') => void;
-    uiTheme: { color: string; opacity: number };
-    setUiTheme: (theme: { color: string; opacity: number }) => void;
-    buttonTheme: { color: string; opacity: number };
-    setButtonTheme: (theme: { color: string; opacity: number }) => void;
+    themeMode: ThemeMode;
+    resolvedTheme: 'light' | 'dark';
+    setThemeMode: (mode: ThemeMode) => void;
     wheelAction: WheelAction;
     setWheelAction: (action: WheelAction) => void;
     userApiKeys: UserApiKey[];
@@ -47,20 +44,14 @@ const modelOptions = {
     agent: ['banana-vision-v1'],
 };
 
-const inputClass = 'w-full rounded-2xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-sm text-[#344054] outline-none transition focus:border-[#98A2B3]';
-const chipClass = 'rounded-full border border-[#E4E7EC] bg-[#F8FAFC] px-3 py-2 text-sm text-[#475467] transition hover:bg-[#F2F4F7]';
-
 export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     isOpen,
     onClose,
-    canvasBackgroundColor,
-    onCanvasBackgroundColorChange,
     language,
     setLanguage,
-    uiTheme,
-    setUiTheme,
-    buttonTheme,
-    setButtonTheme,
+    themeMode,
+    resolvedTheme,
+    setThemeMode,
     wheelAction,
     setWheelAction,
     userApiKeys,
@@ -78,6 +69,18 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     const [capabilities, setCapabilities] = React.useState<AICapability[]>(['text', 'image', 'video']);
 
     if (!isOpen) return null;
+
+    const isDark = resolvedTheme === 'dark';
+    const inputClass = `w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition ${
+        isDark
+            ? 'border-[#2A3140] bg-[#161A22] text-[#F3F4F6] placeholder:text-[#667085] focus:border-[#4B5B78]'
+            : 'border-[#E4E7EC] bg-white text-[#344054] placeholder:text-[#98A2B3] focus:border-[#98A2B3]'
+    }`;
+    const chipClass = `rounded-full border px-3 py-2 text-sm transition ${
+        isDark
+            ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]'
+            : 'border-[#E4E7EC] bg-[#F8FAFC] text-[#475467] hover:bg-[#F2F4F7]'
+    }`;
 
     const toggleCapability = (capability: AICapability) => {
         setCapabilities(prev =>
@@ -99,6 +102,8 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         if (next === 'anthropic' || next === 'qwen') setCapabilities(['text']);
         if (next === 'stability') setCapabilities(['image']);
         if (next === 'google') setCapabilities(['text', 'image', 'video']);
+        if (next === 'openai') setCapabilities(['text', 'image']);
+        if (next === 'custom') setCapabilities(['text', 'image', 'video']);
     };
 
     const handleSaveKey = () => {
@@ -117,20 +122,26 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+        <div className="theme-aware fixed inset-0 z-[100] flex items-center justify-center bg-black/35 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="relative max-h-[88vh] w-[92%] max-w-[620px] overflow-y-auto rounded-[28px] border border-[#E4E7EC] bg-white p-6 shadow-[0_40px_120px_rgba(15,23,42,0.18)]"
+                className={`relative max-h-[88vh] w-[92%] max-w-[680px] overflow-y-auto rounded-[28px] border p-6 shadow-[0_40px_120px_rgba(15,23,42,0.18)] ${
+                    isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'
+                }`}
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h3 className="text-xl font-semibold text-[#101828]">设置</h3>
-                        <p className="mt-1 text-sm text-[#667085]">配置白板、模型和 API 能力。</p>
+                        <h3 className={`text-xl font-semibold ${isDark ? 'text-[#F3F4F6]' : 'text-[#101828]'}`}>设置</h3>
+                        <p className={`mt-1 text-sm ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>
+                            管理主题模式、交互方式、API 能力和默认模型。
+                        </p>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#E4E7EC] text-[#667085] transition hover:bg-[#F9FAFB]"
+                        className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
+                            isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#1B2029]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F9FAFB]'
+                        }`}
                     >
                         ×
                     </button>
@@ -138,11 +149,69 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
 
                 <div className="space-y-6">
                     <section className="space-y-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#98A2B3]">语言与交互</div>
+                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                            界面主题
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-3">
+                            {([
+                                ['light', '浅色模式', '明亮白板与柔和面板'],
+                                ['dark', '黑夜模式', '深色工作台与高对比内容'],
+                                ['system', '跟随系统', '自动跟随设备主题'],
+                            ] as Array<[ThemeMode, string, string]>).map(([mode, title, description]) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setThemeMode(mode)}
+                                    className={`rounded-[24px] border p-4 text-left transition ${
+                                        themeMode === mode
+                                            ? isDark
+                                                ? 'border-[#4B5B78] bg-[#1B2330] shadow-[0_10px_30px_rgba(0,0,0,0.18)]'
+                                                : 'border-[#B2CCFF] bg-[#EEF4FF] shadow-[0_10px_30px_rgba(23,92,211,0.08)]'
+                                            : isDark
+                                                ? 'border-[#2A3140] bg-[#161A22] hover:bg-[#1B2029]'
+                                                : 'border-[#E4E7EC] bg-[#F8FAFC] hover:bg-white'
+                                    }`}
+                                >
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <div className={`text-sm font-semibold ${isDark ? 'text-[#F3F4F6]' : 'text-[#101828]'}`}>{title}</div>
+                                        {themeMode === mode && (
+                                            <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${
+                                                isDark ? 'bg-[#7CB4FF]/20 text-[#7CB4FF]' : 'bg-[#DCEBFF] text-[#175CD3]'
+                                            }`}>
+                                                当前
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className={`mb-4 text-xs ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>{description}</div>
+                                    <div className={`grid h-16 grid-cols-[1fr_56px] gap-2 rounded-2xl p-2 ${
+                                        mode === 'dark' || (mode === 'system' && resolvedTheme === 'dark')
+                                            ? 'bg-[#0F141C]'
+                                            : 'bg-white'
+                                    }`}>
+                                        <div className={`rounded-xl border ${
+                                            mode === 'dark' || (mode === 'system' && resolvedTheme === 'dark')
+                                                ? 'border-[#2A3140] bg-[#161A22]'
+                                                : 'border-[#E4E7EC] bg-[#F8FAFC]'
+                                        }`} />
+                                        <div className={`rounded-xl border ${
+                                            mode === 'dark' || (mode === 'system' && resolvedTheme === 'dark')
+                                                ? 'border-[#2A3140] bg-[#12151B]'
+                                                : 'border-[#E4E7EC] bg-white'
+                                        }`} />
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="space-y-3">
+                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                            语言与交互
+                        </div>
                         <div className="grid gap-3 md:grid-cols-2">
-                            <div className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">语言</div>
-                                <div className="inline-flex w-full rounded-full border border-[#E4E7EC] bg-white p-1">
+                            <div className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>语言</div>
+                                <div className={`inline-flex w-full rounded-full border p-1 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
                                     {([
                                         ['en', 'English'],
                                         ['zho', '中文'],
@@ -151,7 +220,15 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                             key={value}
                                             type="button"
                                             onClick={() => setLanguage(value)}
-                                            className={`flex-1 rounded-full px-3 py-2 text-sm transition ${language === value ? 'bg-[#111827] text-white' : 'text-[#667085]'}`}
+                                            className={`flex-1 rounded-full px-3 py-2 text-sm transition ${
+                                                language === value
+                                                    ? isDark
+                                                        ? 'bg-[#F3F4F6] text-[#111827]'
+                                                        : 'bg-[#111827] text-white'
+                                                    : isDark
+                                                        ? 'text-[#98A2B3]'
+                                                        : 'text-[#667085]'
+                                            }`}
                                         >
                                             {label}
                                         </button>
@@ -159,9 +236,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">滚轮行为</div>
-                                <div className="inline-flex w-full rounded-full border border-[#E4E7EC] bg-white p-1">
+                            <div className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>滚轮行为</div>
+                                <div className={`inline-flex w-full rounded-full border p-1 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
                                     {([
                                         ['zoom', '缩放'],
                                         ['pan', '平移'],
@@ -170,7 +247,15 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                             key={value}
                                             type="button"
                                             onClick={() => setWheelAction(value)}
-                                            className={`flex-1 rounded-full px-3 py-2 text-sm transition ${wheelAction === value ? 'bg-[#111827] text-white' : 'text-[#667085]'}`}
+                                            className={`flex-1 rounded-full px-3 py-2 text-sm transition ${
+                                                wheelAction === value
+                                                    ? isDark
+                                                        ? 'bg-[#F3F4F6] text-[#111827]'
+                                                        : 'bg-[#111827] text-white'
+                                                    : isDark
+                                                        ? 'text-[#98A2B3]'
+                                                        : 'text-[#667085]'
+                                            }`}
                                         >
                                             {label}
                                         </button>
@@ -181,26 +266,10 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                     </section>
 
                     <section className="space-y-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#98A2B3]">画布与外观</div>
-                        <div className="grid gap-3 md:grid-cols-3">
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">画布背景</div>
-                                <input type="color" value={canvasBackgroundColor} onChange={(event) => onCanvasBackgroundColorChange(event.target.value)} className="h-11 w-full rounded-xl border border-white bg-white" />
-                            </label>
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">界面色</div>
-                                <input type="color" value={uiTheme.color} onChange={(event) => setUiTheme({ ...uiTheme, color: event.target.value })} className="h-11 w-full rounded-xl border border-white bg-white" />
-                            </label>
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">按钮色</div>
-                                <input type="color" value={buttonTheme.color} onChange={(event) => setButtonTheme({ ...buttonTheme, color: event.target.value })} className="h-11 w-full rounded-xl border border-white bg-white" />
-                            </label>
+                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                            API 配置
                         </div>
-                    </section>
-
-                    <section className="space-y-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#98A2B3]">API 配置</div>
-                        <div className="rounded-[24px] border border-[#E4E7EC] bg-[#F8FAFC] p-4">
+                        <div className={`rounded-[24px] border p-4 ${isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-[#F8FAFC]'}`}>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <select value={provider} onChange={(event) => handleProviderChange(event.target.value as AIProvider)} className={inputClass}>
                                     <option value="google">Google</option>
@@ -231,14 +300,20 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="Base URL（可选）" className={inputClass} />
 
                                 <div>
-                                    <div className="mb-2 text-sm font-medium text-[#344054]">这个 API 用于</div>
+                                    <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>这个 API 用于</div>
                                     <div className="flex flex-wrap gap-2">
                                         {(['text', 'image', 'video', 'agent'] as AICapability[]).map(capability => (
                                             <button
                                                 key={capability}
                                                 type="button"
                                                 onClick={() => toggleCapability(capability)}
-                                                className={`${chipClass} ${capabilities.includes(capability) ? 'border-[#1D4ED8] bg-[#EFF6FF] text-[#1D4ED8]' : ''}`}
+                                                className={`${chipClass} ${
+                                                    capabilities.includes(capability)
+                                                        ? isDark
+                                                            ? 'border-[#4B5B78] bg-[#1B2330] text-[#7CB4FF]'
+                                                            : 'border-[#1D4ED8] bg-[#EFF6FF] text-[#1D4ED8]'
+                                                        : ''
+                                                }`}
                                             >
                                                 {capabilityLabels[capability]}
                                             </button>
@@ -246,7 +321,16 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     </div>
                                 </div>
 
-                                <button type="button" onClick={handleSaveKey} disabled={!apiKey.trim() || capabilities.length === 0} className="rounded-full bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#0F172A] disabled:cursor-not-allowed disabled:bg-[#D0D5DD]">
+                                <button
+                                    type="button"
+                                    onClick={handleSaveKey}
+                                    disabled={!apiKey.trim() || capabilities.length === 0}
+                                    className={`rounded-full px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed ${
+                                        isDark
+                                            ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]'
+                                            : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'
+                                    }`}
+                                >
                                     保存 API
                                 </button>
                             </div>
@@ -254,18 +338,24 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
 
                         <div className="space-y-2">
                             {userApiKeys.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-[#D0D5DD] px-4 py-6 text-center text-sm text-[#667085]">
+                                <div className={`rounded-2xl border border-dashed px-4 py-6 text-center text-sm ${
+                                    isDark ? 'border-[#3A4458] text-[#98A2B3]' : 'border-[#D0D5DD] text-[#667085]'
+                                }`}>
                                     还没有保存任何 API Key。
                                 </div>
                             ) : (
                                 userApiKeys.map(item => (
-                                    <div key={item.id} className="flex items-center justify-between rounded-2xl border border-[#E4E7EC] bg-white px-4 py-3">
+                                    <div key={item.id} className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                                        isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-white'
+                                    }`}>
                                         <div className="min-w-0">
-                                            <div className="truncate text-sm font-medium text-[#101828]">{item.name || item.provider}</div>
-                                            <div className="mt-1 text-xs text-[#667085]">{maskKey(item.key)}</div>
+                                            <div className={`truncate text-sm font-medium ${isDark ? 'text-[#F3F4F6]' : 'text-[#101828]'}`}>{item.name || item.provider}</div>
+                                            <div className={`mt-1 text-xs ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>{maskKey(item.key)}</div>
                                             <div className="mt-2 flex flex-wrap gap-1.5">
                                                 {(item.capabilities || []).map(capability => (
-                                                    <span key={capability} className="rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] text-[#667085]">
+                                                    <span key={capability} className={`rounded-full px-2 py-1 text-[11px] ${
+                                                        isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F2F4F7] text-[#667085]'
+                                                    }`}>
                                                         {capabilityLabels[capability]}
                                                     </span>
                                                 ))}
@@ -277,9 +367,19 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                     设为默认
                                                 </button>
                                             ) : (
-                                                <span className="rounded-full bg-[#ECFDF3] px-3 py-2 text-xs font-medium text-[#027A48]">默认</span>
+                                                <span className={`rounded-full px-3 py-2 text-xs font-medium ${
+                                                    isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
+                                                }`}>
+                                                    默认
+                                                </span>
                                             )}
-                                            <button type="button" onClick={() => onDeleteApiKey(item.id)} className="rounded-full border border-[#FECACA] bg-white px-3 py-2 text-xs font-medium text-[#DC2626]">
+                                            <button
+                                                type="button"
+                                                onClick={() => onDeleteApiKey(item.id)}
+                                                className={`rounded-full border px-3 py-2 text-xs font-medium ${
+                                                    isDark ? 'border-[#7A271A] text-[#FDA29B]' : 'border-[#FECACA] text-[#DC2626]'
+                                                }`}
+                                            >
                                                 删除
                                             </button>
                                         </div>
@@ -290,28 +390,30 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                     </section>
 
                     <section className="space-y-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#98A2B3]">模型偏好</div>
+                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                            模型偏好
+                        </div>
                         <div className="grid gap-3 md:grid-cols-2">
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">LLM 润色模型</div>
+                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>LLM 润色模型</div>
                                 <select value={modelPreference.textModel} onChange={(event) => setModelPreference({ ...modelPreference, textModel: event.target.value })} className={inputClass}>
                                     {modelOptions.text.map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>
                             </label>
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">图片模型</div>
+                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>图片模型</div>
                                 <select value={modelPreference.imageModel} onChange={(event) => setModelPreference({ ...modelPreference, imageModel: event.target.value })} className={inputClass}>
                                     {modelOptions.image.map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>
                             </label>
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">视频模型</div>
+                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>视频模型</div>
                                 <select value={modelPreference.videoModel} onChange={(event) => setModelPreference({ ...modelPreference, videoModel: event.target.value })} className={inputClass}>
                                     {modelOptions.video.map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>
                             </label>
-                            <label className="rounded-2xl bg-[#F8FAFC] p-3">
-                                <div className="mb-2 text-sm font-medium text-[#344054]">Agent 模型</div>
+                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>Agent 模型</div>
                                 <select value={modelPreference.agentModel} onChange={(event) => setModelPreference({ ...modelPreference, agentModel: event.target.value })} className={inputClass}>
                                     {modelOptions.agent.map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>

@@ -4,6 +4,7 @@ import type { AssetCategory, AssetItem, AssetLibrary, ChatAttachment, Generation
 type RightPanelTab = 'generate' | 'inspiration';
 
 interface RightPanelProps {
+    theme: 'light' | 'dark';
     isMinimized: boolean;
     onToggleMinimize: () => void;
     library: AssetLibrary;
@@ -57,6 +58,7 @@ const EmptyHistory: React.FC = () => (
 );
 
 export const RightPanel: React.FC<RightPanelProps> = ({
+    theme,
     isMinimized,
     onToggleMinimize,
     library,
@@ -69,6 +71,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     onRemoveAttachment,
     onWidthChange,
 }) => {
+    const isDark = theme === 'dark';
     const [activeTab, setActiveTab] = useState<RightPanelTab>('generate');
     const [category, setCategory] = useState<AssetCategory>('character');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -202,7 +205,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     pointerEvents: isMinimized ? 'auto' : 'none',
                     transition: 'opacity 0.2s ease-out',
                 }}
-                className="fixed right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-lg hover:text-neutral-900"
+                className={`theme-aware fixed right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-xl border shadow-lg ${
+                    isDark ? 'border-[#2A3140] bg-[#12151B] text-[#98A2B3] hover:text-white' : 'border-neutral-200 bg-white text-neutral-600 hover:text-neutral-900'
+                }`}
                 title="打开侧边栏"
             >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -221,7 +226,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out',
                     pointerEvents: isMinimized ? 'none' : 'auto',
                 }}
-                className="fixed bottom-4 top-4 z-[30] flex flex-col overflow-hidden rounded-[28px] border border-neutral-200/60 bg-white/96 shadow-2xl backdrop-blur-xl"
+                className={`theme-aware fixed bottom-4 top-4 z-[30] flex flex-col overflow-hidden rounded-[28px] border shadow-2xl backdrop-blur-xl ${
+                    isDark ? 'border-[#2A3140] bg-[#12151B]/96' : 'border-neutral-200/60 bg-white/96'
+                }`}
             >
                 <div
                     className="absolute left-0 top-0 z-10 h-full w-1 cursor-ew-resize transition-colors hover:bg-blue-400"
