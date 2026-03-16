@@ -368,9 +368,19 @@ const DEFAULT_MODEL_PREFS: ModelPreference = {
     agentModel: 'banana-vision-v1',
 };
 
-const TEXT_MODEL_OPTIONS = ['gemini-2.5-pro', 'gpt-4o-mini', 'claude-3-5-sonnet', 'qwen-max'];
-const IMAGE_MODEL_OPTIONS = ['gemini-2.5-flash-image-preview', 'imagen-4.0-generate-001', 'dall-e-3', 'sdxl'];
-const VIDEO_MODEL_OPTIONS = ['veo-2.0-generate-001'];
+// 根据 provider 映射出可选模型列表
+const PROVIDER_MODELS: Record<string, { text: string[]; image: string[]; video: string[] }> = {
+    google:    { text: ['gemini-2.5-pro', 'gemini-2.5-flash'], image: ['gemini-2.5-flash-image-preview', 'imagen-4.0-generate-001'], video: ['veo-2.0-generate-001'] },
+    openai:    { text: ['gpt-4o-mini'], image: ['dall-e-3'], video: [] },
+    anthropic: { text: ['claude-3-5-sonnet'], image: [], video: [] },
+    qwen:      { text: ['qwen-max'], image: [], video: [] },
+    stability: { text: [], image: ['sdxl'], video: [] },
+    banana:    { text: [], image: [], video: [] },
+};
+// 兜底：当用户没有任何 API Key 时的默认选项（不可用，仅占位）
+const FALLBACK_TEXT_OPTIONS = ['gemini-2.5-pro'];
+const FALLBACK_IMAGE_OPTIONS = ['gemini-2.5-flash-image-preview'];
+const FALLBACK_VIDEO_OPTIONS = ['veo-2.0-generate-001'];
 const BOARDS_STORAGE_KEY = 'boards.v1';
 const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
 
@@ -598,6 +608,34 @@ const App: React.FC = () => {
     const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'keyframe'>('image');
     const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16'>('16:9');
     const [progressMessage, setProgressMessage] = useState<string>('');
+    const [isAutoEnhanceEnabled, setIsAutoEnhanceEnabled] = useState<boolean>(() => {
+        try { return localStorage.getItem('autoEnhance.v1') === 'true'; } catch { return false; }
+    });
+
+    // 根据用户已配置的 API Key 动态计算可选模型列表
+    const dynamicModelOptions = useMemo(() => {
+        const textSet = new Set<string>();
+        const imageSet = new Set<string>();
+        const videoSet = new Set<string>();
+        for (const key of userApiKeys) {
+            const providerModels = PROVIDER_MODELS[key.provider];
+            if (!providerModels) continue;
+            const caps = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
+            if (caps.includes('text'))  providerModels.text.forEach(m => textSet.add(m));
+            if (caps.includes('image')) providerModels.image.forEach(m => imageSet.add(m));
+            if (caps.includes('video')) providerModels.video.forEach(m => videoSet.add(m));
+        }
+        return {
+            text:  textSet.size > 0 ? Array.from(textSet) : FALLBACK_TEXT_OPTIONS,
+            image: imageSet.size > 0 ? Array.from(imageSet) : FALLBACK_IMAGE_OPTIONS,
+            video: videoSet.size > 0 ? Array.from(videoSet) : FALLBACK_VIDEO_OPTIONS,
+        };
+    }, [userApiKeys]);
+
+    // 持久化 autoEnhance 开关
+    useEffect(() => {
+        localStorage.setItem('autoEnhance.v1', isAutoEnhanceEnabled.toString());
+    }, [isAutoEnhanceEnabled]);
 
     const resolvedTheme = themeMode === 'system' ? systemTheme : themeMode;
     const themePalette = THEME_PALETTES[resolvedTheme];
@@ -2015,15 +2053,43 @@ const App: React.FC = () => {
 
 
     const handleGenerate = async (promptOverride?: string, source: 'prompt' | 'right' = 'prompt') => {
-        const rawPrompt = (promptOverride ?? prompt).trim();
+        let rawPrompt = (promptOverride ?? prompt).trim();
         if (!rawPrompt) {
-            setError('Please enter a prompt.');
+            setError('请输入提示词。');
+            return;
+        }
+
+        // 自动润色：如果开关开启且有文本 LLM 能力的 Key，则先润色
+        if (isAutoEnhanceEnabled && !promptOverride) {
+            try {
+                setProgressMessage('正在 LLM 润色提示词...');
+                const enhanced = await handleEnhancePrompt({ prompt: rawPrompt, mode: 'smart' });
+                if (enhanced?.enhancedPrompt?.trim()) {
+                    rawPrompt = enhanced.enhancedPrompt.trim();
+                }
+            } catch (e) {
+                console.warn('[Auto-Enhance] 润色失败，使用原始提示词:', e);
+            }
+        }
+
+        // 预检：是否配置了对应能力的 API Key
+        const neededCapability: 'image' | 'video' = generationMode === 'video' ? 'video' : 'image';
+        const neededProvider = neededCapability === 'video'
+            ? inferProviderFromModel(modelPreference.videoModel)
+            : inferProviderFromModel(modelPreference.imageModel);
+        const hasKey = userApiKeys.some(k => {
+            const caps = k.capabilities?.length ? k.capabilities : [];
+            return caps.includes(neededCapability) && k.provider === neededProvider;
+        });
+        if (!hasKey) {
+            setError(`未找到可用于「${neededCapability === 'video' ? '视频' : '图片'}生成」的 ${neededProvider} API Key。请先到设置 → API 配置中添加。`);
+            setIsSettingsPanelOpen(true);
             return;
         }
 
         setIsLoading(true);
         setError(null);
-        setProgressMessage('Starting generation...');
+        setProgressMessage('正在准备生成...');
 
         const getMimeFromDataUrl = (href: string) => {
             const match = href.match(/^data:([^;]+);base64,/i);
@@ -2050,11 +2116,20 @@ const App: React.FC = () => {
                 const selectedElements = elements.filter(el => selectedElementIds.includes(el.id));
                 const imageElement = selectedElements.find(el => el.type === 'image') as ImageElement | undefined;
                 const attachmentImage = activeAttachments[0];
+
+                // Collect @mentioned images as additional reference sources
+                const mentionedImages = mentionedElementIds
+                    .map(id => elements.find(el => el.id === id))
+                    .filter((el): el is ImageElement => !!el && el.type === 'image');
+
+                // Priority: selected element > first @mentioned image > first attachment
                 const baseVideoReference = imageElement
                     ? { href: imageElement.href, mimeType: imageElement.mimeType }
-                    : attachmentImage
-                        ? { href: attachmentImage.href, mimeType: attachmentImage.mimeType }
-                        : undefined;
+                    : mentionedImages.length > 0
+                        ? { href: mentionedImages[0].href, mimeType: mentionedImages[0].mimeType }
+                        : attachmentImage
+                            ? { href: attachmentImage.href, mimeType: attachmentImage.mimeType }
+                            : undefined;
                 
                 if (selectedElementIds.length > 1 || (selectedElementIds.length === 1 && !imageElement)) {
                     setError('For video generation, please select a single image or no elements.');
@@ -2339,10 +2414,14 @@ const App: React.FC = () => {
             }
         } catch (err) {
             const error = err as Error; 
-            let friendlyMessage = `An error occurred during generation: ${error.message}`;
+            let friendlyMessage = `生成出错: ${error.message}`;
 
-            if (error.message && (error.message.includes('429') || error.message.toUpperCase().includes('RESOURCE_EXHAUSTED'))) {
-                friendlyMessage = "API quota exceeded. Please check your Google AI Studio plan and billing details, or try again later.";
+            if (error.message && (error.message.includes('API_KEY_INVALID') || error.message.includes('API key not valid'))) {
+                friendlyMessage = 'API Key 无效。请打开设置，检查或重新添加你的 API Key。';
+            } else if (error.message && (error.message.includes('429') || error.message.toUpperCase().includes('RESOURCE_EXHAUSTED'))) {
+                friendlyMessage = 'API 调用配额已用完。请检查你的 Google AI Studio 计划，或稍后重试。';
+            } else if (error.message && (error.message.includes('not configured') || error.message.includes('not set'))) {
+                friendlyMessage = '未配置 API Key。请先打开设置 → API 配置，添加你的 API Key。';
             }
 
             setError(friendlyMessage); 
@@ -3228,12 +3307,12 @@ const App: React.FC = () => {
                 <div 
                     className="absolute bottom-0 left-0 right-0 z-[40] transition-all duration-300 ease-out flex justify-center pointer-events-none"
                     style={{
-                        paddingLeft: isLayerMinimized ? '0px' : '288px',
-                        paddingRight: `${rightPanelWidth + 32}px`,
-                        paddingBottom: '24px'
+                        paddingLeft: isLayerMinimized ? '16px' : '260px',
+                        paddingRight: `${rightPanelWidth + 24}px`,
+                        paddingBottom: '18px'
                     }}
                 >
-                    <div className="pointer-events-auto w-[90%] max-w-4xl transition-transform hover:-translate-y-1 duration-300 drop-shadow-2xl">
+                    <div className="pointer-events-auto w-full max-w-3xl transition-transform hover:-translate-y-0.5 duration-300 drop-shadow-xl">
                         <PromptBar 
                             t={t}
                             theme={resolvedTheme}
@@ -3253,9 +3332,9 @@ const App: React.FC = () => {
                             selectedTextModel={modelPreference.textModel}
                             selectedImageModel={modelPreference.imageModel}
                             selectedVideoModel={modelPreference.videoModel}
-                            textModelOptions={TEXT_MODEL_OPTIONS}
-                            imageModelOptions={IMAGE_MODEL_OPTIONS}
-                            videoModelOptions={VIDEO_MODEL_OPTIONS}
+                            textModelOptions={dynamicModelOptions.text}
+                            imageModelOptions={dynamicModelOptions.image}
+                            videoModelOptions={dynamicModelOptions.video}
                             onTextModelChange={(model) => setModelPreference(prev => ({ ...prev, textModel: model }))}
                             onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
                             onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
@@ -3266,6 +3345,8 @@ const App: React.FC = () => {
                             onMentionedElementIds={setMentionedElementIds}
                             onEnhancePrompt={handleEnhancePrompt}
                             isEnhancingPrompt={isEnhancingPrompt}
+                            isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                            onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
                             onLockCharacterFromSelection={handleLockCharacterFromSelection}
                             canLockCharacter={!!selectedSingleImage}
                             characterLocks={characterLocks}

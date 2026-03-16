@@ -41,6 +41,8 @@ interface PromptBarProps {
     onMentionedElementIds?: (ids: string[]) => void;
     onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
     isEnhancingPrompt?: boolean;
+    isAutoEnhanceEnabled?: boolean;
+    onAutoEnhanceToggle?: () => void;
     onLockCharacterFromSelection?: (name?: string) => void;
     canLockCharacter?: boolean;
     characterLocks?: CharacterLockProfile[];
@@ -48,7 +50,7 @@ interface PromptBarProps {
     onSetActiveCharacterLock?: (id: string | null) => void;
 }
 
-type ExpandPanel = 'mode' | 'model' | 'enhance' | 'more' | null;
+type ExpandPanel = 'mode' | 'model' | 'more' | null;
 type MentionState = { start: number; end: number; query: string } | null;
 type MentionOption = { id: string; label: string; element: Element };
 
@@ -62,14 +64,6 @@ const TYPE_LABELS: Record<Element['type'], string> = {
     arrow: '箭头',
     line: '线条',
 };
-
-const STYLE_OPTIONS = [
-    { id: 'cinematic', label: '电影感' },
-    { id: 'ink', label: '水墨' },
-    { id: 'ghibli', label: '吉卜力' },
-    { id: 'cyberpunk', label: '赛博朋克' },
-    { id: 'pixar3d', label: '3D 动画' },
-];
 
 function getElementLabel(element: Element): string {
     return element.name?.trim() || `${TYPE_LABELS[element.type]} ${element.id.slice(-4)}`;
@@ -108,9 +102,9 @@ function renderPreview(element: Element) {
 }
 
 const PopoverHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
-    <div className="px-2 pb-2">
-        <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
-        {subtitle && <div className="mt-0.5 text-xs text-[var(--text-muted)]">{subtitle}</div>}
+    <div className="px-2 pb-1.5">
+        <div className="text-xs font-semibold text-[var(--text-primary)]">{title}</div>
+        {subtitle && <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">{subtitle}</div>}
     </div>
 );
 
@@ -118,16 +112,16 @@ const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?
     <button
         type="button"
         onClick={onClick}
-        className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left transition ${
+        className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left transition ${
             active ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-muted)]'
         }`}
     >
         <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{label}</span>
-            {description && <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{description}</span>}
+            <span className="block truncate text-xs font-medium">{label}</span>
+            {description && <span className="mt-0.5 block text-[10px] text-[var(--text-muted)]">{description}</span>}
         </span>
         {active && (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                 <path d="m5 13 4 4L19 7" />
             </svg>
         )}
@@ -166,6 +160,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onMentionedElementIds,
     onEnhancePrompt,
     isEnhancingPrompt = false,
+    isAutoEnhanceEnabled = false,
+    onAutoEnhanceToggle,
     onLockCharacterFromSelection,
     canLockCharacter = false,
     characterLocks = [],
@@ -182,21 +178,17 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const [mentionState, setMentionState] = useState<MentionState>(null);
     const [mentionIndex, setMentionIndex] = useState(0);
     const [selectedMentionIds, setSelectedMentionIds] = useState<string[]>([]);
-    const [enhanceMode, setEnhanceMode] = useState<PromptEnhanceMode>('smart');
-    const [stylePreset, setStylePreset] = useState('cinematic');
-    const [enhanceResult, setEnhanceResult] = useState<PromptEnhanceResult | null>(null);
-    const [enhanceError, setEnhanceError] = useState<string | null>(null);
     const [isDragActive, setIsDragActive] = useState(false);
 
-    const triggerClass = `inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition ${
+    const triggerClass = `inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition ${
         isDark ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]' : 'border-[#E5E7EB] bg-[#F5F7FA] text-[#344054] hover:border-[#D0D5DD] hover:bg-white'
     }`;
     const activeTriggerClass = isDark ? 'border-[#4B5B78] bg-[#202734] text-white shadow-sm' : 'border-[#D0D5DD] bg-white text-[#111827] shadow-sm';
-    const popoverCardClass = `absolute bottom-full left-0 z-[80] mb-3 min-w-[240px] rounded-[22px] border p-2 shadow-[0_26px_60px_rgba(15,23,42,0.16)] ${
+    const popoverCardClass = `absolute bottom-full left-0 z-[80] mb-2 min-w-[220px] rounded-[16px] border p-1.5 shadow-[0_20px_50px_rgba(15,23,42,0.14)] ${
         isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E5E7EB] bg-white'
     }`;
-    const shellClass = isDark ? 'border-[#2A3140] bg-[#12151B] shadow-[0_24px_60px_rgba(0,0,0,0.28)]' : 'border-[#E4E7EC] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.12)]';
-    const textareaClass = isDark ? 'min-h-[128px] w-full resize-none border-none bg-transparent px-0 py-0 text-[20px] leading-8 text-[#F8FAFC] outline-none placeholder:text-[#667085]' : 'min-h-[128px] w-full resize-none border-none bg-transparent px-0 py-0 text-[20px] leading-8 text-[#111827] outline-none placeholder:text-[#C2CAD7]';
+    const shellClass = isDark ? 'border-[#2A3140] bg-[#12151B] shadow-[0_20px_50px_rgba(0,0,0,0.24)]' : 'border-[#E4E7EC] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.10)]';
+    const textareaClass = isDark ? 'min-h-[48px] w-full resize-none border-none bg-transparent px-0 py-0 text-[14px] leading-6 text-[#F8FAFC] outline-none placeholder:text-[#667085]' : 'min-h-[48px] w-full resize-none border-none bg-transparent px-0 py-0 text-[14px] leading-6 text-[#111827] outline-none placeholder:text-[#C2CAD7]';
 
     const mentionOptions = useMemo<MentionOption[]>(() => canvasElements.filter(element => element.isVisible !== false).map(element => ({
         id: element.id,
@@ -239,7 +231,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         const textarea = textareaRef.current;
         if (!textarea) return;
         textarea.style.height = '0px';
-        textarea.style.height = `${Math.min(280, Math.max(128, textarea.scrollHeight))}px`;
+        textarea.style.height = `${Math.min(160, Math.max(48, textarea.scrollHeight))}px`;
     }, [prompt]);
 
     useEffect(() => setMentionIndex(0), [mentionState?.query]);
@@ -283,23 +275,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         });
     }, [mentionState, prompt, setPrompt]);
 
-    const handleEnhance = useCallback(async () => {
-        if (!prompt.trim() || !onEnhancePrompt || isEnhancingPrompt) return;
-        setEnhanceError(null);
-
-        try {
-            const result = await onEnhancePrompt({
-                prompt,
-                mode: enhanceMode,
-                stylePreset: enhanceMode === 'style' ? stylePreset : undefined,
-            });
-            setEnhanceResult(result);
-        } catch (error) {
-            setEnhanceResult(null);
-            setEnhanceError(error instanceof Error ? error.message : '提示词润色失败');
-        }
-    }, [enhanceMode, isEnhancingPrompt, onEnhancePrompt, prompt, stylePreset]);
-
     const handleSaveEffect = useCallback(() => {
         if (!prompt.trim()) return;
         const name = window.prompt('给这个提示词起个名字', `我的效果 ${userEffects.length + 1}`);
@@ -323,7 +298,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     return (
         <div ref={rootRef} className="theme-aware w-full">
             <div
-                className={`relative overflow-visible rounded-[30px] border transition-all duration-200 ${shellClass} ${isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : ''}`}
+                className={`relative overflow-visible rounded-[20px] border transition-all duration-200 ${shellClass} ${isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : ''}`}
                 onDragEnter={event => {
                     if (!Array.from(event.dataTransfer.items).some(item => item.type.startsWith('image/'))) return;
                     event.preventDefault();
@@ -370,7 +345,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </div>
                 )}
 
-                <div className="relative px-5 pt-5">
+                <div className="relative px-3.5 pt-3">
                     <textarea
                         ref={textareaRef}
                         value={prompt}
@@ -412,9 +387,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     />
 
                     {mentionState && filteredMentions.length > 0 && (
-                        <div className={`${popoverCardClass} top-[calc(100%_-_8px)] bottom-auto w-[360px]`}>
-                            <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">Whiteboard References</div>
-                            <div className="space-y-1">
+                        <div className={`${popoverCardClass} top-[calc(100%_-_8px)] bottom-auto w-[320px]`}>
+                            <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">Whiteboard References</div>
+                            <div className="space-y-0.5">
                                 {filteredMentions.map((item, index) => (
                                     <button
                                         key={item.id}
@@ -423,12 +398,12 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             event.preventDefault();
                                             insertMention(item);
                                         }}
-                                        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${index === mentionIndex ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-muted)]'}`}
+                                        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition ${index === mentionIndex ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-muted)]'}`}
                                     >
-                                        <div className="h-11 w-11 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--panel-muted)]">{renderPreview(item.element)}</div>
+                                        <div className="h-8 w-8 overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--panel-muted)]">{renderPreview(item.element)}</div>
                                         <div className="min-w-0 flex-1">
-                                            <div className="truncate text-sm font-medium">@{item.label}</div>
-                                            <div className="mt-0.5 text-xs text-[var(--text-muted)]">{TYPE_LABELS[item.element.type]}</div>
+                                            <div className="truncate text-xs font-medium">@{item.label}</div>
+                                            <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">{TYPE_LABELS[item.element.type]}</div>
                                         </div>
                                     </button>
                                 ))}
@@ -437,28 +412,28 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     )}
 
                     {(attachments.length > 0 || selectedMentionItems.length > 0) && (
-                        <div className="mt-4 space-y-3 pb-1">
+                        <div className="mt-2.5 space-y-2 pb-1">
                             {attachments.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-1.5">
                                     {attachments.map(attachment => (
                                         <div
                                             key={attachment.id}
-                                            className={`group flex items-center gap-3 rounded-[20px] border px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 ${isDark ? 'border-[#2A3140] bg-[#171C24]' : 'border-[#E4E7EC] bg-[#F8FAFC]'}`}
+                                            className={`group flex items-center gap-2 rounded-[14px] border px-2 py-1.5 transition-all duration-200 hover:-translate-y-0.5 ${isDark ? 'border-[#2A3140] bg-[#171C24]' : 'border-[#E4E7EC] bg-[#F8FAFC]'}`}
                                         >
-                                            <div className="h-12 w-12 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-white">
+                                            <div className="h-8 w-8 overflow-hidden rounded-lg border border-[var(--border-color)] bg-white">
                                                 <img src={attachment.href} alt={attachment.name} className="h-full w-full object-cover" />
                                             </div>
                                             <div className="min-w-0">
-                                                <div className={`max-w-[150px] truncate text-sm font-medium ${isDark ? 'text-[#F8FAFC]' : 'text-[#111827]'}`}>{attachment.name}</div>
-                                                <div className="text-xs text-[var(--text-muted)]">参考图</div>
+                                                <div className={`max-w-[120px] truncate text-xs font-medium ${isDark ? 'text-[#F8FAFC]' : 'text-[#111827]'}`}>{attachment.name}</div>
+                                                <div className="text-[10px] text-[var(--text-muted)]">参考图</div>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => onRemoveAttachment?.(attachment.id)}
-                                                className={`flex h-8 w-8 items-center justify-center rounded-full transition ${isDark ? 'text-[#98A2B3] hover:bg-[#202734] hover:text-white' : 'text-[#667085] hover:bg-white hover:text-[#111827]'}`}
+                                                className={`flex h-6 w-6 items-center justify-center rounded-full transition ${isDark ? 'text-[#98A2B3] hover:bg-[#202734] hover:text-white' : 'text-[#667085] hover:bg-white hover:text-[#111827]'}`}
                                                 title="移除参考图"
                                             >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M18 6 6 18" />
                                                     <path d="m6 6 12 12" />
                                                 </svg>
@@ -469,24 +444,24 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             )}
 
                             {selectedMentionItems.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-1.5">
                                     {selectedMentionItems.map(item => (
                                         <div
                                             key={item.id}
-                                            className={`group flex items-center gap-3 rounded-[22px] border px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 ${isDark ? 'border-[#34507A] bg-[#16202E]' : 'border-[#B2CCFF] bg-[#EEF4FF]'}`}
+                                            className={`group flex items-center gap-2 rounded-[14px] border px-2 py-1.5 transition-all duration-200 hover:-translate-y-0.5 ${isDark ? 'border-[#34507A] bg-[#16202E]' : 'border-[#B2CCFF] bg-[#EEF4FF]'}`}
                                         >
-                                            <div className="h-12 w-12 overflow-hidden rounded-2xl border border-white/40 bg-white/70">{renderPreview(item.element)}</div>
+                                            <div className="h-8 w-8 overflow-hidden rounded-lg border border-white/40 bg-white/70">{renderPreview(item.element)}</div>
                                             <div className="min-w-0">
-                                                <div className={`max-w-[170px] truncate text-sm font-semibold ${isDark ? 'text-[#E0EAFF]' : 'text-[#175CD3]'}`}>@{item.label}</div>
-                                                <div className={`text-xs ${isDark ? 'text-[#9DB8E5]' : 'text-[#528BFF]'}`}>{TYPE_LABELS[item.element.type]} 引用</div>
+                                                <div className={`max-w-[130px] truncate text-xs font-semibold ${isDark ? 'text-[#E0EAFF]' : 'text-[#175CD3]'}`}>@{item.label}</div>
+                                                <div className={`text-[10px] ${isDark ? 'text-[#9DB8E5]' : 'text-[#528BFF]'}`}>{TYPE_LABELS[item.element.type]} 引用</div>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedMentionIds(prev => prev.filter(id => id !== item.id))}
-                                                className={`flex h-8 w-8 items-center justify-center rounded-full transition ${isDark ? 'text-[#9DB8E5] hover:bg-[#202734] hover:text-white' : 'text-[#528BFF] hover:bg-white hover:text-[#175CD3]'}`}
+                                                className={`flex h-6 w-6 items-center justify-center rounded-full transition ${isDark ? 'text-[#9DB8E5] hover:bg-[#202734] hover:text-white' : 'text-[#528BFF] hover:bg-white hover:text-[#175CD3]'}`}
                                                 title="移除引用"
                                             >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M18 6 6 18" />
                                                     <path d="m6 6 12 12" />
                                                 </svg>
@@ -499,7 +474,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     )}
                 </div>
 
-                <div className={`relative flex items-center justify-between gap-4 border-t px-4 py-4 ${isDark ? 'border-[#2A3140]' : 'border-[#EEF1F5]'}`}>
+                <div className={`relative flex items-center justify-between gap-3 border-t px-3 py-2.5 ${isDark ? 'border-[#2A3140]' : 'border-[#EEF1F5]'}`}>
                     <div className="min-w-0 flex-1 overflow-visible">
                         <div className="flex flex-wrap items-center gap-2">
                             <div className="relative">
@@ -546,60 +521,30 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     ))}
                                                 </div>
                                             )}
-
-                                            {textModelOptions.length > 0 && (
-                                                <>
-                                                    <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#98A2B3]">LLM 润色模型</div>
-                                                    {textModelOptions.map(model => <MenuOptionButton key={model} label={model} active={selectedTextModel === model} onClick={() => onTextModelChange?.(model)} />)}
-                                                </>
-                                            )}
                                         </div>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="relative">
-                                <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'enhance' ? null : 'enhance'))} className={`${triggerClass} ${expandedPanel === 'enhance' ? activeTriggerClass : ''}`}>
-                                    LLM 润色
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
-                                </button>
-                                {expandedPanel === 'enhance' && (
-                                    <div className={`${popoverCardClass} w-[300px]`}>
-                                        <PopoverHeader title="Prompt 润色" subtitle="先选模式，再一键优化当前输入" />
-                                        <div className="space-y-1">
-                                            {[['smart', '智能润色'], ['style', '风格化'], ['precise', '精准优化'], ['translate', '多语言转换']].map(([mode, label]) => (
-                                                <MenuOptionButton key={mode} label={label} active={enhanceMode === mode} onClick={() => setEnhanceMode(mode as PromptEnhanceMode)} />
-                                            ))}
-                                        </div>
-
-                                        {enhanceMode === 'style' && (
-                                            <div className="mt-3 grid grid-cols-2 gap-2 px-1">
-                                                {STYLE_OPTIONS.map(option => (
-                                                    <button
-                                                        key={option.id}
-                                                        type="button"
-                                                        onClick={() => setStylePreset(option.id)}
-                                                        className={`rounded-2xl border px-3 py-2 text-sm transition ${stylePreset === option.id ? 'border-[#B2CCFF] bg-[var(--accent-bg)] text-[var(--accent-text)]' : isDark ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]' : 'border-[#E5E7EB] bg-[#F9FAFB] text-[#344054] hover:bg-white'}`}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        <div className="mt-3 px-1">
-                                            <button
-                                                type="button"
-                                                onClick={handleEnhance}
-                                                disabled={isEnhancingPrompt || !prompt.trim()}
-                                                className={`w-full rounded-2xl px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed ${isDark ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]' : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'}`}
-                                            >
-                                                {isEnhancingPrompt ? '润色中...' : '立即润色'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            <button
+                                type="button"
+                                onClick={onAutoEnhanceToggle}
+                                title={isAutoEnhanceEnabled ? '关闭自动润色（生成前不再自动优化提示词）' : '开启自动润色（生成前自动用 LLM 优化提示词）'}
+                                className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition ${
+                                    isAutoEnhanceEnabled
+                                        ? isDark
+                                            ? 'border-[#528BFF] bg-[#1E3A5F] text-[#B2CCFF] shadow-sm'
+                                            : 'border-[#84ADFF] bg-[#EEF4FF] text-[#175CD3] shadow-sm'
+                                        : isDark
+                                            ? 'border-[#2A3140] bg-[#1B2029] text-[#667085] hover:bg-[#252C39]'
+                                            : 'border-[#E5E7EB] bg-[#F5F7FA] text-[#98A2B3] hover:border-[#D0D5DD] hover:bg-white'
+                                }`}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
+                                </svg>
+                                {isAutoEnhanceEnabled ? '润色 ON' : '润色'}
+                            </button>
 
                             <div className="relative">
                                 <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} ${expandedPanel === 'more' ? activeTriggerClass : ''}`}>
@@ -688,17 +633,17 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         disabled={isLoading || !prompt.trim()}
                         aria-label={t('promptBar.generate')}
                         title={t('promptBar.generate')}
-                        className={`flex h-12 min-w-[88px] items-center justify-center rounded-2xl px-4 transition disabled:cursor-not-allowed ${isDark ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]' : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'}`}
+                        className={`flex h-9 min-w-[72px] items-center justify-center rounded-xl px-3 transition disabled:cursor-not-allowed ${isDark ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]' : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'}`}
                     >
                         {isLoading ? (
-                            <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                 <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
                             </svg>
                         ) : (
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold">生成</span>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-semibold">生成</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                     <path d="M5 12h14" />
                                     <path d="m12 5 7 7-7 7" />
                                 </svg>
@@ -707,45 +652,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </button>
                 </div>
             </div>
-
-            {(enhanceResult || enhanceError) && (
-                <div className={`mt-3 rounded-[24px] border p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)] ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
-                    {enhanceError && <div className="text-sm text-rose-500">{enhanceError}</div>}
-
-                    {enhanceResult && (
-                        <>
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">AI Prompt Assist</div>
-                            <div className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">{enhanceResult.enhancedPrompt}</div>
-
-                            {enhanceResult.suggestions.length > 0 && (
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {enhanceResult.suggestions.map((item, index) => (
-                                        <span key={`${item}-${index}`} className="rounded-full border border-[var(--border-color)] bg-[var(--panel-muted)] px-3 py-1.5 text-xs text-[var(--text-muted)]">
-                                            {item}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="mt-4 flex flex-wrap items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setPrompt(enhanceResult.enhancedPrompt);
-                                        requestAnimationFrame(() => textareaRef.current?.focus());
-                                    }}
-                                    className={`rounded-full px-4 py-2 text-xs font-medium transition ${isDark ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white' : 'bg-[#111827] text-white hover:bg-[#0F172A]'}`}
-                                >
-                                    采用润色结果
-                                </button>
-                                <button type="button" onClick={() => navigator.clipboard?.writeText(enhanceResult.enhancedPrompt)} className={triggerClass}>
-                                    复制
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            )}
         </div>
     );
 };

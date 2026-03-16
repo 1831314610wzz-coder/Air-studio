@@ -255,15 +255,15 @@ function editorStyles(): string {
     return `
 .rich-prompt-editor {
     flex: 1;
-    min-height: var(--prompt-editor-min-height, 28px);
-    max-height: var(--prompt-editor-max-height, 220px);
+    min-height: var(--prompt-editor-min-height, 22px);
+    max-height: var(--prompt-editor-max-height, 160px);
     overflow-y: auto;
     outline: none;
-    font-size: var(--prompt-editor-font-size, 15px);
-    line-height: var(--prompt-editor-line-height, 1.6);
+    font-size: var(--prompt-editor-font-size, 13px);
+    line-height: var(--prompt-editor-line-height, 1.5);
     color: var(--prompt-editor-color, #111827) !important;
     caret-color: var(--prompt-editor-caret, #4f46e5);
-    padding: var(--prompt-editor-padding, 0 6px);
+    padding: var(--prompt-editor-padding, 0 4px);
     word-break: break-word;
     background: transparent;
     white-space: pre-wrap;

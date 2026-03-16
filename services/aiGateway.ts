@@ -1,5 +1,55 @@
 import type { AIProvider, PromptEnhanceRequest, PromptEnhanceResult, UserApiKey } from '../types';
-import { enhancePromptWithGemini, generateImageFromText } from './geminiService';
+import { enhancePromptWithGemini, generateImageFromText, validateGeminiApiKey } from './geminiService';
+
+/**
+ * 通用 API Key 验证 — 根据 provider 调用对应的验证逻辑
+ */
+export async function validateApiKey(provider: AIProvider, apiKey: string, baseUrl?: string): Promise<{ ok: boolean; message?: string }> {
+    if (provider === 'google') {
+        return validateGeminiApiKey(apiKey);
+    }
+
+    // OpenAI-compatible: 调用 /models 接口
+    if (provider === 'openai' || provider === 'qwen' || provider === 'custom') {
+        try {
+            const url = (baseUrl || DEFAULT_BASE_URLS[provider]).replace(/\/$/, '');
+            const res = await fetch(`${url}/models`, {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${apiKey}` },
+            });
+            if (res.ok) return { ok: true };
+            const body = await res.json().catch(() => ({}));
+            return { ok: false, message: body?.error?.message || `HTTP ${res.status}` };
+        } catch (err) {
+            return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+        }
+    }
+
+    // Anthropic: 调用 /messages 会返回 401 如果 key 无效
+    if (provider === 'anthropic') {
+        try {
+            const url = (baseUrl || DEFAULT_BASE_URLS.anthropic).replace(/\/$/, '');
+            const res = await fetch(`${url}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+            });
+            if (res.ok || res.status === 200) return { ok: true };
+            if (res.status === 401 || res.status === 403) return { ok: false, message: 'API Key 无效或权限不足' };
+            return { ok: true }; // 其他错误可能是模型不存在，但 key 是对的
+        } catch (err) {
+            return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+        }
+    }
+
+    // Stability / Banana: 简单格式校验
+    if (apiKey.length < 10) return { ok: false, message: 'API Key 太短' };
+    return { ok: true, message: '已保存（格式校验通过，未做在线验证）' };
+}
 
 const DEFAULT_BASE_URLS: Record<AIProvider, string> = {
     openai: 'https://api.openai.com/v1',

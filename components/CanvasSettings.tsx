@@ -1,5 +1,6 @@
 import React from 'react';
 import type { WheelAction, UserApiKey, ModelPreference, AIProvider, AICapability, ThemeMode } from '../types';
+import { validateApiKey } from '../services/aiGateway';
 
 interface CanvasSettingsProps {
     isOpen: boolean;
@@ -67,6 +68,8 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     const [displayName, setDisplayName] = React.useState('');
     const [showKey, setShowKey] = React.useState(false);
     const [capabilities, setCapabilities] = React.useState<AICapability[]>(['text', 'image', 'video']);
+    const [isValidating, setIsValidating] = React.useState(false);
+    const [validationResult, setValidationResult] = React.useState<{ ok: boolean; message?: string } | null>(null);
 
     if (!isOpen) return null;
 
@@ -106,19 +109,30 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         if (next === 'custom') setCapabilities(['text', 'image', 'video']);
     };
 
-    const handleSaveKey = () => {
+    const handleSaveKey = async () => {
         if (!apiKey.trim() || capabilities.length === 0) return;
+
+        // 先验证 key 是否有效
+        setIsValidating(true);
+        setValidationResult(null);
+        const result = await validateApiKey(provider, apiKey.trim(), baseUrl.trim() || undefined);
+        setIsValidating(false);
+        setValidationResult(result);
+
+        if (!result.ok) return; // 验证失败不保存
+
         onAddApiKey({
             provider,
             capabilities,
             key: apiKey.trim(),
             baseUrl: baseUrl.trim() || undefined,
             name: displayName.trim() || undefined,
-            status: 'unknown',
+            status: 'ok',
             isDefault: false,
         });
         setApiKey('');
         setDisplayName('');
+        setValidationResult(null);
     };
 
     return (
@@ -324,15 +338,28 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleSaveKey}
-                                    disabled={!apiKey.trim() || capabilities.length === 0}
+                                    disabled={!apiKey.trim() || capabilities.length === 0 || isValidating}
                                     className={`rounded-full px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed ${
                                         isDark
                                             ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]'
                                             : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'
                                     }`}
                                 >
-                                    保存 API
+                                    {isValidating ? '验证中...' : '验证并保存'}
                                 </button>
+
+                                {validationResult && (
+                                    <div className={`mt-2 rounded-xl px-3 py-2 text-sm ${
+                                        validationResult.ok
+                                            ? isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
+                                            : isDark ? 'bg-[#3A1616] text-[#FDA29B]' : 'bg-[#FEF3F2] text-[#B42318]'
+                                    }`}>
+                                        {validationResult.ok
+                                            ? '✓ Key 验证通过，已保存'
+                                            : `✗ 验证失败：${validationResult.message || 'API Key 无效'}`
+                                        }
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -341,7 +368,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 <div className={`rounded-2xl border border-dashed px-4 py-6 text-center text-sm ${
                                     isDark ? 'border-[#3A4458] text-[#98A2B3]' : 'border-[#D0D5DD] text-[#667085]'
                                 }`}>
-                                    还没有保存任何 API Key。
+                                    <div className="mb-2 text-lg">🔑</div>
+                                    <div className="font-medium">还没有配置 API Key</div>
+                                    <div className="mt-1 text-xs">在上方选择供应商、粘贴 Key，点击「验证并保存」即可开始使用 AI 能力</div>
                                 </div>
                             ) : (
                                 userApiKeys.map(item => (
@@ -349,7 +378,12 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                         isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-white'
                                     }`}>
                                         <div className="min-w-0">
-                                            <div className={`truncate text-sm font-medium ${isDark ? 'text-[#F3F4F6]' : 'text-[#101828]'}`}>{item.name || item.provider}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`inline-block h-2 w-2 rounded-full ${
+                                                    item.status === 'ok' ? 'bg-green-500' : item.status === 'error' ? 'bg-red-400' : 'bg-yellow-400'
+                                                }`} title={item.status === 'ok' ? '已验证' : item.status === 'error' ? '验证失败' : '未验证'} />
+                                                <span className={`truncate text-sm font-medium ${isDark ? 'text-[#F3F4F6]' : 'text-[#101828]'}`}>{item.name || item.provider}</span>
+                                            </div>
                                             <div className={`mt-1 text-xs ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>{maskKey(item.key)}</div>
                                             <div className="mt-2 flex flex-wrap gap-1.5">
                                                 {(item.capabilities || []).map(capability => (

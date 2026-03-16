@@ -51,17 +51,17 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                 style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                    border: '1px solid rgba(99, 102, 241, 0.35)',
-                    borderRadius: '6px',
-                    padding: '1px 6px 1px 2px',
-                    fontSize: '12px',
+                    gap: '3px',
+                    backgroundColor: 'rgba(99, 102, 241, 0.10)',
+                    border: '1px solid rgba(99, 102, 241, 0.28)',
+                    borderRadius: '5px',
+                    padding: '0px 5px 0px 2px',
+                    fontSize: '11px',
                     lineHeight: '1.4',
                     color: '#4F46E5',
                     fontWeight: 500,
                     cursor: 'default',
-                    maxWidth: '140px',
+                    maxWidth: '120px',
                     verticalAlign: 'middle',
                 }}
                 title={label}
@@ -71,15 +71,15 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                         src={thumbnail}
                         alt={label}
                         style={{
-                            width: '18px',
-                            height: '18px',
+                            width: '14px',
+                            height: '14px',
                             objectFit: 'cover',
-                            borderRadius: '3px',
+                            borderRadius: '2px',
                             flexShrink: 0,
                         }}
                     />
                 ) : (
-                    <span style={{ fontSize: '14px', lineHeight: 1 }}>
+                    <span style={{ fontSize: '12px', lineHeight: 1 }}>
                         {typeIcon[elementType] || '🔷'}
                     </span>
                 )}
@@ -88,7 +88,7 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        maxWidth: '90px',
+                        maxWidth: '76px',
                     }}
                 >
                     {label}
@@ -96,10 +96,10 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                 <span
                     onClick={deleteNode}
                     style={{
-                        marginLeft: '2px',
+                        marginLeft: '1px',
                         opacity: 0.5,
                         cursor: 'pointer',
-                        fontSize: '11px',
+                        fontSize: '10px',
                         lineHeight: 1,
                         flexShrink: 0,
                     }}
