@@ -51,17 +51,17 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                 style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '3px',
+                    gap: '4px',
                     backgroundColor: 'rgba(99, 102, 241, 0.10)',
-                    border: '1px solid rgba(99, 102, 241, 0.28)',
-                    borderRadius: '5px',
-                    padding: '0px 5px 0px 2px',
-                    fontSize: '11px',
-                    lineHeight: '1.4',
+                    border: '1px solid rgba(99, 102, 241, 0.24)',
+                    borderRadius: '6px',
+                    padding: '1px 6px 1px 3px',
+                    fontSize: '12px',
+                    lineHeight: '1.5',
                     color: '#4F46E5',
                     fontWeight: 500,
                     cursor: 'default',
-                    maxWidth: '120px',
+                    maxWidth: '140px',
                     verticalAlign: 'middle',
                 }}
                 title={label}
@@ -71,10 +71,10 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                         src={thumbnail}
                         alt={label}
                         style={{
-                            width: '14px',
-                            height: '14px',
+                            width: '16px',
+                            height: '16px',
                             objectFit: 'cover',
-                            borderRadius: '2px',
+                            borderRadius: '3px',
                             flexShrink: 0,
                         }}
                     />
@@ -88,7 +88,7 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        maxWidth: '76px',
+                        maxWidth: '86px',
                     }}
                 >
                     {label}
@@ -96,13 +96,16 @@ const MentionNodeView: React.FC<MentionNodeViewProps> = ({ node, deleteNode }) =
                 <span
                     onClick={deleteNode}
                     style={{
-                        marginLeft: '1px',
-                        opacity: 0.5,
+                        marginLeft: '2px',
+                        opacity: 0.45,
                         cursor: 'pointer',
-                        fontSize: '10px',
+                        fontSize: '11px',
                         lineHeight: 1,
                         flexShrink: 0,
+                        transition: 'opacity 0.15s',
                     }}
+                    onMouseEnter={e => { (e.target as HTMLElement).style.opacity = '1'; }}
+                    onMouseLeave={e => { (e.target as HTMLElement).style.opacity = '0.45'; }}
                     title="移除引用"
                 >
                     ×

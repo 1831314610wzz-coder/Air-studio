@@ -252,9 +252,3 @@ VITE_GEMINI_API_KEY=your_gemini_api_key_here
 ## �📄 License
 
 本项目基于 [Apache License 2.0](./LICENSE) 开源。
-
----
-
-<p align="center">
-  <sub>Built with ❤️ and AI by <a href="https://github.com/Paker-kk">@Paker-kk</a></sub>
-</p>

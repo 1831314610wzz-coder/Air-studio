@@ -273,8 +273,12 @@ function editorStyles(): string {
 .rich-prompt-editor .ProseMirror,
 .rich-prompt-editor .ProseMirror *,
 .rich-prompt-editor p,
-.rich-prompt-editor span {
+.rich-prompt-editor span:not(.mention-node span) {
     color: var(--prompt-editor-color, #111827) !important;
+}
+
+.rich-prompt-editor .mention-node span {
+    color: #4F46E5 !important;
 }
 
 .rich-prompt-editor p {
@@ -282,11 +286,15 @@ function editorStyles(): string {
     padding: 0;
 }
 
-.rich-prompt-editor:empty:before,
-.rich-prompt-editor p:first-child:empty:before {
+/* Placeholder when editor is empty */
+.rich-prompt-editor.ProseMirror:empty:before,
+.rich-prompt-editor p:first-child:empty:before,
+.rich-prompt-editor.ProseMirror > p:only-child:empty:before {
     content: attr(data-placeholder);
     color: var(--prompt-editor-placeholder, #9ca3af) !important;
     pointer-events: none;
+    float: left;
+    height: 0;
 }
 
 .tippy-box[data-theme~='light-border'] {
