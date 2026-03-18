@@ -1,4 +1,4 @@
-
+﻿
 
 
 
@@ -366,14 +366,36 @@ const createNewBoard = (name: string): Board => {
     };
 };
 
+const parseEnvList = (raw?: string): string[] =>
+    (raw || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
+
+const ENV_CUSTOM_API_KEY = (import.meta.env.VITE_CUSTOM_API_KEY || '').trim();
+const ENV_CUSTOM_API_BASE_URL = (import.meta.env.VITE_CUSTOM_API_BASE_URL || '').trim();
+const ENV_CUSTOM_API_NAME = (import.meta.env.VITE_CUSTOM_API_NAME || 'apiyi').trim();
+const ENV_CUSTOM_TEXT_API_KEY = (import.meta.env.VITE_CUSTOM_TEXT_API_KEY || '').trim();
+const ENV_CUSTOM_TEXT_API_BASE_URL = (import.meta.env.VITE_CUSTOM_TEXT_API_BASE_URL || '').trim();
+const ENV_CUSTOM_TEXT_API_NAME = (import.meta.env.VITE_CUSTOM_TEXT_API_NAME || 'ark-llm').trim();
+const ENV_CUSTOM_IMAGE_API_KEY = (import.meta.env.VITE_CUSTOM_IMAGE_API_KEY || ENV_CUSTOM_API_KEY).trim();
+const ENV_CUSTOM_IMAGE_API_BASE_URL = (import.meta.env.VITE_CUSTOM_IMAGE_API_BASE_URL || ENV_CUSTOM_API_BASE_URL).trim();
+const ENV_CUSTOM_IMAGE_API_NAME = (import.meta.env.VITE_CUSTOM_IMAGE_API_NAME || ENV_CUSTOM_API_NAME).trim();
+const ENV_CUSTOM_TEXT_MODELS = parseEnvList(import.meta.env.VITE_CUSTOM_TEXT_MODELS || 'gpt-5-nano,gpt-4.1-nano');
+const ENV_CUSTOM_IMAGE_MODELS = parseEnvList(import.meta.env.VITE_CUSTOM_IMAGE_MODELS || 'nano-banana,nano-banana-2,nano-banana-pro');
+const ENV_CUSTOM_DEFAULT_TEXT_MODEL = (import.meta.env.VITE_CUSTOM_DEFAULT_TEXT_MODEL || ENV_CUSTOM_TEXT_MODELS[0] || '').trim();
+const ENV_CUSTOM_DEFAULT_IMAGE_MODEL = (import.meta.env.VITE_CUSTOM_DEFAULT_IMAGE_MODEL || ENV_CUSTOM_IMAGE_MODELS[0] || '').trim();
+const ENV_CUSTOM_TEXT_KEY_ID = 'env_custom_text_api_key';
+const ENV_CUSTOM_IMAGE_KEY_ID = 'env_custom_image_api_key';
+
 const DEFAULT_MODEL_PREFS: ModelPreference = {
-    textModel: 'gemini-2.5-pro',
-    imageModel: 'gemini-2.5-flash-image',
+    textModel: ENV_CUSTOM_DEFAULT_TEXT_MODEL || 'gemini-2.5-pro',
+    imageModel: ENV_CUSTOM_DEFAULT_IMAGE_MODEL || 'gemini-2.5-flash-image',
     videoModel: 'veo-2.0-generate-001',
     agentModel: 'banana-vision-v1',
 };
 
-// 根据 provider 映射出可选模型列表
+// 鏍规嵁 provider 鏄犲皠鍑哄彲閫夋ā鍨嬪垪琛?
 const PROVIDER_MODELS: Record<string, { text: string[]; image: string[]; video: string[] }> = {
     google:    { text: ['gemini-2.5-pro', 'gemini-2.5-flash'], image: ['gemini-2.5-flash-image', 'imagen-4.0-generate-001'], video: ['veo-2.0-generate-001'] },
     openai:    { text: ['gpt-4o-mini'], image: ['dall-e-3'], video: [] },
@@ -381,13 +403,86 @@ const PROVIDER_MODELS: Record<string, { text: string[]; image: string[]; video: 
     qwen:      { text: ['qwen-max'], image: [], video: [] },
     stability: { text: [], image: ['sdxl'], video: [] },
     banana:    { text: [], image: [], video: [] },
+    custom:    { text: ENV_CUSTOM_TEXT_MODELS, image: ENV_CUSTOM_IMAGE_MODELS, video: [] },
 };
-// 兜底：当用户没有任何 API Key 时的默认选项（不可用，仅占位）
+// 鍏滃簳锛氬綋鐢ㄦ埛娌℃湁浠讳綍 API Key 鏃剁殑榛樿閫夐」锛堜笉鍙敤锛屼粎鍗犱綅锛?
 const FALLBACK_TEXT_OPTIONS = ['gemini-2.5-pro'];
 const FALLBACK_IMAGE_OPTIONS = ['gemini-2.5-flash-image'];
 const FALLBACK_VIDEO_OPTIONS = ['veo-2.0-generate-001'];
+const IMAGE_RESOLUTION_OPTIONS = ['512x512', '768x768', '1024x1024', '1536x1536'] as const;
+const IMAGE_ASPECT_RATIO_OPTIONS = ['1:1', '4:3', '3:4', '16:9', '9:16'] as const;
 const BOARDS_STORAGE_KEY = 'boards.v1';
 const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
+const MAX_PERSIST_BOARD_COUNT = 6;
+const MAX_PERSIST_BOARD_HISTORY = 4;
+
+const safeLocalStorageSetItem = (key: string, value: string): boolean => {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (error) {
+        console.warn(`[storage] Failed to persist "${key}"`, error);
+        return false;
+    }
+};
+
+const toPersistBoard = (board: Board, mode: 'full' | 'single'): Board => {
+    const safeElements = Array.isArray(board.elements) ? board.elements : [];
+    const safeHistoryRaw = Array.isArray(board.history) ? board.history.filter(Array.isArray) : [];
+    const compactHistory =
+        mode === 'single'
+            ? [safeElements]
+            : (safeHistoryRaw.length > 0 ? safeHistoryRaw : [safeElements]).slice(-MAX_PERSIST_BOARD_HISTORY);
+
+    return {
+        ...board,
+        elements: safeElements,
+        history: compactHistory,
+        historyIndex: Math.min(Math.max(0, board.historyIndex ?? 0), compactHistory.length - 1),
+    };
+};
+
+const persistBoardsSafely = (boards: Board[]): boolean => {
+    const normalizedBoards = boards.map(board => toPersistBoard(board, 'full'));
+    if (safeLocalStorageSetItem(BOARDS_STORAGE_KEY, JSON.stringify(normalizedBoards))) {
+        return true;
+    }
+
+    const singleHistoryBoards = boards.map(board => toPersistBoard(board, 'single'));
+    if (safeLocalStorageSetItem(BOARDS_STORAGE_KEY, JSON.stringify(singleHistoryBoards))) {
+        return true;
+    }
+
+    const trimmedBoards = singleHistoryBoards.slice(-MAX_PERSIST_BOARD_COUNT);
+    return safeLocalStorageSetItem(BOARDS_STORAGE_KEY, JSON.stringify(trimmedBoards));
+};
+
+const escapeXmlAttr = (input: string): string =>
+    input
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+function buildImageSizeByRatio(resolution: string, aspectRatio: string): string {
+    const parsed = resolution.match(/^(\d+)x(\d+)$/);
+    const base = parsed ? Math.max(Number(parsed[1]), Number(parsed[2])) : 1024;
+
+    const ratioMap: Record<string, [number, number]> = {
+        '1:1': [1, 1],
+        '4:3': [4, 3],
+        '3:4': [3, 4],
+        '16:9': [16, 9],
+        '9:16': [9, 16],
+    };
+    const ratio = ratioMap[aspectRatio] || ratioMap['1:1'];
+    const maxRatioSide = Math.max(ratio[0], ratio[1]);
+    const scale = base / maxRatioSide;
+    const width = Math.max(64, Math.round((ratio[0] * scale) / 64) * 64);
+    const height = Math.max(64, Math.round((ratio[1] * scale) / 64) * 64);
+    return `${width}x${height}`;
+}
 
 const THEME_PALETTES = {
     light: {
@@ -454,14 +549,48 @@ const loadBoardsFromStorage = (): Board[] => {
             return [createNewBoard('Board 1')];
         }
 
-        const boards = parsed.filter((board): board is Board => {
-            return !!board && typeof board.id === 'string' && typeof board.name === 'string' && Array.isArray(board.elements);
-        });
+        const boards = parsed
+            .map((board: Partial<Board>) => {
+                if (!board || typeof board.id !== 'string' || typeof board.name !== 'string' || !Array.isArray(board.elements)) {
+                    return null;
+                }
+
+                const elements = board.elements;
+                const historyRaw = Array.isArray(board.history) ? board.history.filter(Array.isArray) : [];
+                const history = historyRaw.length > 0 ? historyRaw : [elements];
+                const historyIndex = Math.min(Math.max(0, Number(board.historyIndex ?? 0)), history.length - 1);
+                const panOffset = board.panOffset && Number.isFinite(board.panOffset.x) && Number.isFinite(board.panOffset.y)
+                    ? board.panOffset
+                    : { x: 0, y: 0 };
+                const zoom = Number.isFinite(board.zoom) ? Math.max(0.05, Number(board.zoom)) : 1;
+                const canvasBackgroundColor = typeof board.canvasBackgroundColor === 'string'
+                    ? board.canvasBackgroundColor
+                    : '#FFFFFF';
+
+                return {
+                    id: board.id,
+                    name: board.name,
+                    elements,
+                    history,
+                    historyIndex,
+                    panOffset,
+                    zoom,
+                    canvasBackgroundColor,
+                } as Board;
+            })
+            .filter((board): board is Board => !!board);
 
         return boards.length > 0 ? boards : [createNewBoard('Board 1')];
     } catch {
         return [createNewBoard('Board 1')];
     }
+};
+
+type RuntimeIssue = {
+    id: string;
+    title: string;
+    detail?: string;
+    timestamp: number;
 };
 
 const App: React.FC = () => {
@@ -488,22 +617,18 @@ const App: React.FC = () => {
     const [prompt, setPrompt] = useState('');
     const [promptAttachments, setPromptAttachments] = useState<ChatAttachment[]>([]);
     const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
-    // @ 瀵洜鏁ら崗鍐 id 閸掓銆冮敍鍫㈡暠 PromptBar 閸︺劎鏁ら幋椋庡仯閸戣崵鏁撻幋鎰閸氬本顒炴潻鍥ㄦ降閿?
+    // @ 鐎殿喗娲滈弫銈夊礂閸愵亞顦?id 闁告帗顨夐妴鍐晬閸垺鏆?PromptBar 闁革负鍔庨弫銈夊箣妞嬪骸浠柛鎴ｅ吹閺佹捇骞嬮幇顒€顤呴柛姘湰椤掔偞娼婚崶銊﹂檷闁?
     const [mentionedElementIds, setMentionedElementIds] = useState<string[]>([]);
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
-    const [isLayerMinimized, setIsLayerMinimized] = useState(() => {
-        const saved = localStorage.getItem('layerPanelMinimized');
-        return saved === 'true';
-    });
-    const [isInspirationMinimized, setIsInspirationMinimized] = useState(() => {
-        const saved = localStorage.getItem('inspirationPanelMinimized');
-        return saved === 'true';
-    });
-    const [toolbarLeft, setToolbarLeft] = useState(68); // 瀹搞儱鍙块弽蹇曟畱 left 娴ｅ秶鐤?
-    const [rightPanelWidth, setRightPanelWidth] = useState(2); // 閸欏厖鏅堕棃銏℃緲鐎圭偤妾€硅棄瀹抽敍鍫㈡暏閿?PromptBar 閸氬本顒為敓?
+    // Force startup chrome into compact mode (as requested UI default):
+    // left layer panel collapsed + right inspiration panel collapsed.
+    const [isLayerMinimized, setIsLayerMinimized] = useState(true);
+    const [isInspirationMinimized, setIsInspirationMinimized] = useState(true);
+    const [toolbarLeft, setToolbarLeft] = useState(68); // 鐎规悶鍎遍崣鍧楀冀韫囨洘鐣?left 濞达絽绉堕悿?
+    const [rightPanelWidth, setRightPanelWidth] = useState(2); // 闁告瑥鍘栭弲鍫曟閵忊剝绶查悗鍦仱濡绢垳鈧妫勭€规娊鏁嶉崼銏℃殢闁?PromptBar 闁告艾鏈鐐烘晸?
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const [wheelAction, setWheelAction] = useState<WheelAction>('zoom');
     const [croppingState, setCroppingState] = useState<{ elementId: string; originalElement: ImageElement; cropBox: Rect } | null>(null);
@@ -516,11 +641,11 @@ const App: React.FC = () => {
     
     // Persist minimize state
     useEffect(() => {
-        localStorage.setItem('layerPanelMinimized', isLayerMinimized.toString());
+        safeLocalStorageSetItem('layerPanelMinimized', isLayerMinimized.toString());
     }, [isLayerMinimized]);
     
     useEffect(() => {
-        localStorage.setItem('inspirationPanelMinimized', isInspirationMinimized.toString());
+        safeLocalStorageSetItem('inspirationPanelMinimized', isInspirationMinimized.toString());
     }, [isInspirationMinimized]);
 
     useEffect(() => {
@@ -532,12 +657,12 @@ const App: React.FC = () => {
     const chromeMetrics = useMemo(() => getCompactChromeMetrics(viewportWidth), [viewportWidth]);
 
     useEffect(() => {
-        localStorage.setItem(BOARDS_STORAGE_KEY, JSON.stringify(boards));
+        persistBoardsSafely(boards);
     }, [boards]);
 
     useEffect(() => {
         if (!activeBoardId) return;
-        localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, activeBoardId);
+        safeLocalStorageSetItem(ACTIVE_BOARD_STORAGE_KEY, activeBoardId);
     }, [activeBoardId]);
     
     useEffect(() => {
@@ -574,11 +699,11 @@ const App: React.FC = () => {
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
     useEffect(() => {
-        localStorage.setItem('themeMode.v1', themeMode);
+        safeLocalStorageSetItem('themeMode.v1', themeMode);
     }, [themeMode]);
     const [userApiKeys, setUserApiKeys] = useState<UserApiKey[]>([]);
     const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
-    // 新用户引导弹窗：API Key 加载完成且无任何 Key 时自动显示
+    // 鏂扮敤鎴峰紩瀵煎脊绐楋細API Key 鍔犺浇瀹屾垚涓旀棤浠讳綍 Key 鏃惰嚜鍔ㄦ樉绀?
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [clearKeysOnExit, setClearKeysOnExit] = useState<boolean>(() => {
         try { return localStorage.getItem('security.clearKeysOnExit') === 'true'; } catch { return false; }
@@ -615,15 +740,32 @@ const App: React.FC = () => {
     
     const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'keyframe'>('image');
     const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+    const [imageResolution, setImageResolution] = useState<string>(() => {
+        try {
+            const saved = localStorage.getItem('imageResolution.v1');
+            return saved && IMAGE_RESOLUTION_OPTIONS.includes(saved as (typeof IMAGE_RESOLUTION_OPTIONS)[number]) ? saved : '1024x1024';
+        } catch {
+            return '1024x1024';
+        }
+    });
+    const [imageAspectRatio, setImageAspectRatio] = useState<string>(() => {
+        try {
+            const saved = localStorage.getItem('imageAspectRatio.v1');
+            return saved && IMAGE_ASPECT_RATIO_OPTIONS.includes(saved as (typeof IMAGE_ASPECT_RATIO_OPTIONS)[number]) ? saved : '1:1';
+        } catch {
+            return '1:1';
+        }
+    });
     const [progressMessage, setProgressMessage] = useState<string>('');
+    const [runtimeIssue, setRuntimeIssue] = useState<RuntimeIssue | null>(null);
     const [isAutoEnhanceEnabled, setIsAutoEnhanceEnabled] = useState<boolean>(() => {
         try { return localStorage.getItem('autoEnhance.v1') === 'true'; } catch { return false; }
     });
 
-    // ── API 配置管理 Store ──────────────────────────────────────
+    // 鈹€鈹€ API 閰嶇疆绠＄悊 Store 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     const apiConfigStore = useAPIConfigStore();
 
-    // 根据用户已配置的 API Key 动态计算可选模型列表
+    // 鏍规嵁鐢ㄦ埛宸查厤缃殑 API Key 鍔ㄦ€佽绠楀彲閫夋ā鍨嬪垪琛?
     const dynamicModelOptions = useMemo(() => {
         const textSet = new Set<string>();
         const imageSet = new Set<string>();
@@ -643,10 +785,39 @@ const App: React.FC = () => {
         };
     }, [userApiKeys]);
 
-    // 持久化 autoEnhance 开关
     useEffect(() => {
-        localStorage.setItem('autoEnhance.v1', isAutoEnhanceEnabled.toString());
+        if (!apiKeysLoaded) return;
+        setModelPreference(prev => {
+            const next = { ...prev };
+            let changed = false;
+
+            if (!dynamicModelOptions.text.includes(next.textModel)) {
+                next.textModel = ENV_CUSTOM_DEFAULT_TEXT_MODEL || dynamicModelOptions.text[0] || next.textModel;
+                changed = true;
+            }
+            if (!dynamicModelOptions.image.includes(next.imageModel)) {
+                next.imageModel = ENV_CUSTOM_DEFAULT_IMAGE_MODEL || dynamicModelOptions.image[0] || next.imageModel;
+                changed = true;
+            }
+            if (dynamicModelOptions.video.length > 0 && !dynamicModelOptions.video.includes(next.videoModel)) {
+                next.videoModel = dynamicModelOptions.video[0];
+                changed = true;
+            }
+
+            return changed ? next : prev;
+        });
+    }, [apiKeysLoaded, dynamicModelOptions]);
+
+    // 鎸佷箙鍖?autoEnhance 寮€鍏?
+    useEffect(() => {
+        safeLocalStorageSetItem('autoEnhance.v1', isAutoEnhanceEnabled.toString());
     }, [isAutoEnhanceEnabled]);
+    useEffect(() => {
+        safeLocalStorageSetItem('imageResolution.v1', imageResolution);
+    }, [imageResolution]);
+    useEffect(() => {
+        safeLocalStorageSetItem('imageAspectRatio.v1', imageAspectRatio);
+    }, [imageAspectRatio]);
 
     const resolvedTheme = themeMode === 'system' ? systemTheme : themeMode;
     const themePalette = THEME_PALETTES[resolvedTheme];
@@ -664,6 +835,39 @@ const App: React.FC = () => {
     const previousToolRef = useRef<Tool>('select');
     const spacebarDownTime = useRef<number | null>(null);
     elementsRef.current = elements;
+
+    const reportRuntimeIssue = useCallback((title: string, detail?: string) => {
+        setRuntimeIssue({
+            id: generateId(),
+            title,
+            detail,
+            timestamp: Date.now(),
+        });
+    }, []);
+
+    useEffect(() => {
+        const onWindowError = (event: ErrorEvent) => {
+            const title = event.message || 'Unhandled runtime error';
+            const detail = event.error?.stack || `${event.filename}:${event.lineno}:${event.colno}`;
+            reportRuntimeIssue(title, detail);
+        };
+
+        const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+            const reason = event.reason as any;
+            const title = reason?.message || 'Unhandled promise rejection';
+            const detail =
+                reason?.stack ||
+                (typeof reason === 'string' ? reason : JSON.stringify(reason, null, 2));
+            reportRuntimeIssue(title, detail);
+        };
+
+        window.addEventListener('error', onWindowError);
+        window.addEventListener('unhandledrejection', onUnhandledRejection);
+        return () => {
+            window.removeEventListener('error', onWindowError);
+            window.removeEventListener('unhandledrejection', onUnhandledRejection);
+        };
+    }, [reportRuntimeIssue]);
 
     useEffect(() => {
         setSelectedElementIds([]);
@@ -688,7 +892,7 @@ const App: React.FC = () => {
         }
     }, [userEffects]);
 
-    // 从加密存储异步加载 API Key（首次挂载 + 兼容迁移旧明文）
+    // 浠庡姞瀵嗗瓨鍌ㄥ紓姝ュ姞杞?API Key锛堥娆℃寕杞?+ 鍏煎杩佺Щ鏃ф槑鏂囷級
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -698,36 +902,98 @@ const App: React.FC = () => {
             const normalized = (keys || [])
                 .map(normalizeApiKeyEntry)
                 .filter((item): item is UserApiKey => !!item);
-            setUserApiKeys(normalized);
+
+            let merged = normalized.filter(item => item.id !== ENV_CUSTOM_TEXT_KEY_ID && item.id !== ENV_CUSTOM_IMAGE_KEY_ID);
+            const now = Date.now();
+
+            if (ENV_CUSTOM_IMAGE_API_KEY && ENV_CUSTOM_IMAGE_API_BASE_URL) {
+                merged = [
+                    {
+                        id: ENV_CUSTOM_IMAGE_KEY_ID,
+                        provider: 'custom',
+                        capabilities: ['image'],
+                        key: ENV_CUSTOM_IMAGE_API_KEY,
+                        baseUrl: ENV_CUSTOM_IMAGE_API_BASE_URL,
+                        name: ENV_CUSTOM_IMAGE_API_NAME,
+                        isDefault: true,
+                        status: 'ok',
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                    ...merged,
+                ];
+            }
+
+            if (ENV_CUSTOM_TEXT_API_KEY && ENV_CUSTOM_TEXT_API_BASE_URL) {
+                merged = [
+                    {
+                        id: ENV_CUSTOM_TEXT_KEY_ID,
+                        provider: 'custom',
+                        capabilities: ['text'],
+                        key: ENV_CUSTOM_TEXT_API_KEY,
+                        baseUrl: ENV_CUSTOM_TEXT_API_BASE_URL,
+                        name: ENV_CUSTOM_TEXT_API_NAME,
+                        isDefault: true,
+                        status: 'ok',
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                    ...merged,
+                ];
+            }
+
+            const defaultByCap: Record<AICapability, string | null> = { text: null, image: null, video: null, agent: null };
+            for (const item of merged) {
+                const caps = item.capabilities?.length ? item.capabilities : inferCapabilitiesByProvider(item.provider);
+                for (const cap of caps) {
+                    if (!defaultByCap[cap]) defaultByCap[cap] = item.id;
+                }
+            }
+            merged = merged.map(item => {
+                const caps = item.capabilities?.length ? item.capabilities : inferCapabilitiesByProvider(item.provider);
+                const isDefaultForAnyCap = caps.some(cap => defaultByCap[cap] === item.id);
+                return { ...item, isDefault: isDefaultForAnyCap };
+            });
+
+            setUserApiKeys(merged);
             setApiKeysLoaded(true);
         })();
         return () => { cancelled = true; };
     }, []);
 
-    // 持久化 API Key（加密写入）
     useEffect(() => {
-        if (!apiKeysLoaded) return; // 防止初始空数组覆盖加密数据
+        if (!apiKeysLoaded) return;
+        setModelPreference(prev => ({
+            ...prev,
+            textModel: ENV_CUSTOM_DEFAULT_TEXT_MODEL || prev.textModel,
+            imageModel: ENV_CUSTOM_DEFAULT_IMAGE_MODEL || prev.imageModel,
+        }));
+    }, [apiKeysLoaded]);
+
+    // 鎸佷箙鍖?API Key锛堝姞瀵嗗啓鍏ワ級
+    useEffect(() => {
+        if (!apiKeysLoaded) return; // 闃叉鍒濆绌烘暟缁勮鐩栧姞瀵嗘暟鎹?
         saveKeysEncrypted(userApiKeys);
     }, [userApiKeys, apiKeysLoaded]);
 
-    // 新用户引导：API Key 异步加载完成后，如果没有任何 Key 且用户未主动跳过，自动弹出引导
+    // 鏂扮敤鎴峰紩瀵硷細API Key 寮傛鍔犺浇瀹屾垚鍚庯紝濡傛灉娌℃湁浠讳綍 Key 涓旂敤鎴锋湭涓诲姩璺宠繃锛岃嚜鍔ㄥ脊鍑哄紩瀵?
     useEffect(() => {
         if (!apiKeysLoaded) return;
         const hasSkipped = localStorage.getItem('onboarding.skipped') === 'true';
         if (userApiKeys.length === 0 && !hasSkipped) {
             setShowOnboarding(true);
         } else if (userApiKeys.length > 0) {
-            // 用户在设置面板中添加了 Key → 自动关闭引导弹窗
+            // 鐢ㄦ埛鍦ㄨ缃潰鏉夸腑娣诲姞浜?Key 鈫?鑷姩鍏抽棴寮曞寮圭獥
             setShowOnboarding(false);
         }
     }, [apiKeysLoaded, userApiKeys.length]);
 
-    // 持久化 clearKeysOnExit 设置
+    // 鎸佷箙鍖?clearKeysOnExit 璁剧疆
     useEffect(() => {
-        localStorage.setItem('security.clearKeysOnExit', clearKeysOnExit.toString());
+        safeLocalStorageSetItem('security.clearKeysOnExit', clearKeysOnExit.toString());
     }, [clearKeysOnExit]);
 
-    // 退出时清除 API Key
+    // 閫€鍑烘椂娓呴櫎 API Key
     useEffect(() => {
         if (!clearKeysOnExit) return;
         const handleBeforeUnload = () => { clearAllKeyData(); };
@@ -736,16 +1002,16 @@ const App: React.FC = () => {
     }, [clearKeysOnExit]);
 
     useEffect(() => {
-        localStorage.setItem('modelPreference.v1', JSON.stringify(modelPreference));
+        safeLocalStorageSetItem('modelPreference.v1', JSON.stringify(modelPreference));
     }, [modelPreference]);
 
     useEffect(() => {
-        localStorage.setItem('characterLocks.v1', JSON.stringify(characterLocks));
+        safeLocalStorageSetItem('characterLocks.v1', JSON.stringify(characterLocks));
     }, [characterLocks]);
 
     useEffect(() => {
         if (activeCharacterLockId) {
-            localStorage.setItem('characterLocks.activeId', activeCharacterLockId);
+            safeLocalStorageSetItem('characterLocks.activeId', activeCharacterLockId);
         } else {
             localStorage.removeItem('characterLocks.activeId');
         }
@@ -1093,9 +1359,9 @@ const App: React.FC = () => {
     }, [activeBoardId]);
 
     // Handle drop from AssetLibraryPanel (after commitAction and getCanvasPoint are defined)
-    const handleAssetDropRef = useRef<(e: React.DragEvent) => void>();
+    const handleAssetDropRef = useRef<(e: React.DragEvent) => boolean>();
     handleAssetDropRef.current = (e: React.DragEvent) => {
-        const payload = e.dataTransfer.getData('text/plain');
+        const payload = e.dataTransfer.getData('application/x-making-asset') || e.dataTransfer.getData('text/plain');
         try {
             const parsed = JSON.parse(payload);
             if (parsed?.__makingAsset && parsed.item) {
@@ -1119,8 +1385,10 @@ const App: React.FC = () => {
                     setActiveTool('select');
                 };
                 img.src = item.dataUrl;
+                return true;
             }
         } catch {}
+        return false;
     };
 
     const getDescendants = useCallback((elementId: string, allElements: Element[]): Element[] => {
@@ -1242,6 +1510,24 @@ const App: React.FC = () => {
             y: (yOnSvg - panOffset.y) / zoom,
         };
     }, [panOffset, zoom]);
+
+    const getInitialDisplayImageSize = useCallback((naturalWidth: number, naturalHeight: number) => {
+        if (!svgRef.current || naturalWidth <= 0 || naturalHeight <= 0) {
+            return { width: naturalWidth, height: naturalHeight };
+        }
+        const svgBounds = svgRef.current.getBoundingClientRect();
+        const maxScreenWidth = Math.max(320, svgBounds.width * 0.46);
+        const maxScreenHeight = Math.max(220, svgBounds.height * 0.42);
+
+        const currentScreenWidth = naturalWidth * zoom;
+        const currentScreenHeight = naturalHeight * zoom;
+        const fitScale = Math.min(1, maxScreenWidth / currentScreenWidth, maxScreenHeight / currentScreenHeight);
+
+        return {
+            width: Math.max(1, Math.round(naturalWidth * fitScale)),
+            height: Math.max(1, Math.round(naturalHeight * fitScale)),
+        };
+    }, [zoom]);
 
     const handleAddImageElement = useCallback(async (file: File) => {
         if (!file.type.startsWith('image/')) {
@@ -1996,7 +2282,7 @@ const App: React.FC = () => {
         try {
             setIsLoading(true);
             setError(null);
-            setProgressMessage('BANANA Agent 濮濓絽婀潻娑滎攽妤傛ɑ绔婚弨鎯с亣...');
+            setProgressMessage('BANANA Agent 正在进行超分辨率处理...');
             const result = await runBananaImageAgent(
                 { href: element.href, mimeType: element.mimeType },
                 'upscale',
@@ -2017,7 +2303,7 @@ const App: React.FC = () => {
         try {
             setIsLoading(true);
             setError(null);
-            setProgressMessage('BANANA Agent 濮濓絽婀崢濠氭珟閼冲本娅?..');
+            setProgressMessage('BANANA Agent 正在移除背景...');
             const result = await runBananaImageAgent(
                 { href: element.href, mimeType: element.mimeType },
                 'remove-background'
@@ -2114,16 +2400,16 @@ const App: React.FC = () => {
     }, [editingElement?.text, setElements]);
 
     /**
-     * 构建带有图片引用标注的提示词
+     * 鏋勫缓甯︽湁鍥剧墖寮曠敤鏍囨敞鐨勬彁绀鸿瘝
      *
-     * 将 prompt 中的 @Label 标记（如 @Image_1、@图片_2）替换为有序的
-     * 「[参考图N]」标记，并按出现顺序返回对应的图片数据数组。
-     * 这样 Gemini API 收到的 parts 就能通过位置正确匹配引用关系。
+     * 灏?prompt 涓殑 @Label 鏍囪锛堝 @Image_1銆丂鍥剧墖_2锛夋浛鎹负鏈夊簭鐨?
+     * 銆孾鍙傝€冨浘N]銆嶆爣璁帮紝骞舵寜鍑虹幇椤哄簭杩斿洖瀵瑰簲鐨勫浘鐗囨暟鎹暟缁勩€?
+     * 杩欐牱 Gemini API 鏀跺埌鐨?parts 灏辫兘閫氳繃浣嶇疆姝ｇ‘鍖归厤寮曠敤鍏崇郴銆?
      *
-     * 例：
-     *   输入 prompt: "把@Image_1的人物替换为@Image_2的兔子"
-     *   输出 prompt: "把[参考图1]的人物替换为[参考图2]的兔子"
-     *   输出 orderedImages: [Image_1的数据, Image_2的数据]
+     * 渚嬶細
+     *   杈撳叆 prompt: "鎶夽Image_1鐨勪汉鐗╂浛鎹负@Image_2鐨勫厰瀛?
+     *   杈撳嚭 prompt: "鎶奫鍙傝€冨浘1]鐨勪汉鐗╂浛鎹负[鍙傝€冨浘2]鐨勫厰瀛?
+     *   杈撳嚭 orderedImages: [Image_1鐨勬暟鎹? Image_2鐨勬暟鎹甝
      */
     const buildMentionAwarePrompt = useCallback((
         rawPrompt: string,
@@ -2133,10 +2419,10 @@ const App: React.FC = () => {
             return { prompt: rawPrompt, orderedMentionImages: [] };
         }
 
-        // 按照 prompt 中 @label 出现的位置排序
+        // 鎸夌収 prompt 涓?@label 鍑虹幇鐨勪綅缃帓搴?
         const mentionOrder: { element: ImageElement; index: number }[] = [];
         for (const el of mentionedImages) {
-            // 尝试匹配 @name 或 @label（CanvasMentionExtension 输出的格式）
+            // 灏濊瘯鍖归厤 @name 鎴?@label锛圕anvasMentionExtension 杈撳嚭鐨勬牸寮忥級
             const escapedName = (el.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regex = new RegExp(`@${escapedName}\\b`, 'i');
             const match = rawPrompt.match(regex);
@@ -2144,7 +2430,7 @@ const App: React.FC = () => {
         }
         mentionOrder.sort((a, b) => a.index - b.index);
 
-        // 替换 prompt 中的 @label → [参考图N]
+        // 鏇挎崲 prompt 涓殑 @label 鈫?[鍙傝€冨浘N]
         let processedPrompt = rawPrompt;
         const orderedImages: { href: string; mimeType: string }[] = [];
         mentionOrder.forEach(({ element }, idx) => {
@@ -2154,10 +2440,10 @@ const App: React.FC = () => {
             orderedImages.push({ href: element.href, mimeType: element.mimeType });
         });
 
-        // 如果有多张参考图，在 prompt 前添加说明
+        // 濡傛灉鏈夊寮犲弬鑰冨浘锛屽湪 prompt 鍓嶆坊鍔犺鏄?
         if (orderedImages.length > 1) {
-            const mapping = orderedImages.map((_, i) => `[参考图${i + 1}]`).join('、');
-            processedPrompt = `以下提示词中包含 ${mapping} 分别对应按顺序传入的参考图片。\n${processedPrompt}`;
+            const mapping = orderedImages.map((_, i) => [ref]).join(', ');
+            processedPrompt = `以下提示词中包含 ${mapping}，分别对应按顺序传入的参考图片。\n${processedPrompt}`;
         }
 
         return { prompt: processedPrompt, orderedMentionImages: orderedImages };
@@ -2165,16 +2451,17 @@ const App: React.FC = () => {
 
 
     const handleGenerate = async (promptOverride?: string, source: 'prompt' | 'right' = 'prompt') => {
+        if (isLoading) return;
         let rawPrompt = (promptOverride ?? prompt).trim();
         if (!rawPrompt) {
-            setError('请输入提示词。');
+            setError('Please enter a prompt.');
             return;
         }
 
-        // 自动润色：如果开关开启且有文本 LLM 能力的 Key，则先润色
+        // 鑷姩娑﹁壊锛氬鏋滃紑鍏冲紑鍚笖鏈夋枃鏈?LLM 鑳藉姏鐨?Key锛屽垯鍏堟鼎鑹?
         if (isAutoEnhanceEnabled && !promptOverride) {
             try {
-                setProgressMessage('正在 LLM 润色提示词...');
+                setProgressMessage('正在使用 LLM 润色提示词...');
                 const enhanced = await handleEnhancePrompt({ prompt: rawPrompt, mode: 'smart' });
                 if (enhanced?.enhancedPrompt?.trim()) {
                     rawPrompt = enhanced.enhancedPrompt.trim();
@@ -2184,7 +2471,7 @@ const App: React.FC = () => {
             }
         }
 
-        // 预检：是否配置了对应能力的 API Key
+        // 棰勬锛氭槸鍚﹂厤缃簡瀵瑰簲鑳藉姏鐨?API Key
         const neededCapability: 'image' | 'video' = generationMode === 'video' ? 'video' : 'image';
         const neededProvider = neededCapability === 'video'
             ? inferProviderFromModel(modelPreference.videoModel)
@@ -2194,7 +2481,7 @@ const App: React.FC = () => {
             return caps.includes(neededCapability) && k.provider === neededProvider;
         });
         if (!hasKey) {
-            setError(`未找到可用于「${neededCapability === 'video' ? '视频' : '图片'}生成」的 ${neededProvider} API Key。请先到设置 → API 配置中添加。`);
+            setError('No API key found for current generation mode. Please add one in Settings -> API config.');
             setIsSettingsPanelOpen(true);
             return;
         }
@@ -2221,25 +2508,25 @@ const App: React.FC = () => {
         const imageOutputName = generationMode === 'keyframe' ? 'Keyframe' : 'Generated Image';
 
         /**
-         * ======== 首尾帧动画模式 (Keyframe Mode) ========
+         * ======== 棣栧熬甯у姩鐢绘ā寮?(Keyframe Mode) ========
          *
-         * 【功能】用户选中或 @引用一张起始帧图片，Veo 2.0 会基于该图片
-         *        生成一段平滑的过渡动画视频并放置到画布上。
+         * 銆愬姛鑳姐€戠敤鎴烽€変腑鎴?@寮曠敤涓€寮犺捣濮嬪抚鍥剧墖锛孷eo 2.0 浼氬熀浜庤鍥剧墖
+         *        鐢熸垚涓€娈靛钩婊戠殑杩囨浮鍔ㄧ敾瑙嗛骞舵斁缃埌鐢诲竷涓娿€?
          *
-         * 【参考图优先级】选中图片 > @引用图片
-         * 【输出】VideoElement（blob URL），放置在画布中心
+         * 銆愬弬鑰冨浘浼樺厛绾с€戦€変腑鍥剧墖 > @寮曠敤鍥剧墖
+         * 銆愯緭鍑恒€慥ideoElement锛坆lob URL锛夛紝鏀剧疆鍦ㄧ敾甯冧腑蹇?
          *
-         * 【限制】Veo API 当前仅支持单张参考图作为起始帧，
-         *        如有两张以上参考图会在提示词中描述过渡意图。
+         * 銆愰檺鍒躲€慥eo API 褰撳墠浠呮敮鎸佸崟寮犲弬鑰冨浘浣滀负璧峰甯э紝
+         *        濡傛湁涓ゅ紶浠ヤ笂鍙傝€冨浘浼氬湪鎻愮ず璇嶄腑鎻忚堪杩囨浮鎰忓浘銆?
          */
         if (generationMode === 'keyframe') {
             try {
-                // 前置检查：首尾帧动画仅支持 Google Veo 模型
+                // 鍓嶇疆妫€鏌ワ細棣栧熬甯у姩鐢讳粎鏀寔 Google Veo 妯″瀷
                 if (videoProvider !== 'google') {
-                    throw new Error('首尾帧动画目前仅支持 Google Veo 模型，请先配置 Google 视频 API Key。');
+                    throw new Error('Keyframe mode currently supports Google Veo models only.');
                 }
 
-                // 收集参考帧图片：优先选中的 → 然后 @引用的
+                // 鏀堕泦鍙傝€冨抚鍥剧墖锛氫紭鍏堥€変腑鐨?鈫?鐒跺悗 @寮曠敤鐨?
                 const mentionedImages = mentionedElementIds
                     .map(id => elements.find(el => el.id === id))
                     .filter((el): el is ImageElement => !!el && el.type === 'image');
@@ -2247,16 +2534,16 @@ const App: React.FC = () => {
                     .filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
                 const allFrameRefs = [...selectedImages, ...mentionedImages];
 
-                // 至少需要 1 张参考图作为起始帧
+                // 鑷冲皯闇€瑕?1 寮犲弬鑰冨浘浣滀负璧峰甯?
                 if (allFrameRefs.length < 1) {
-                    setError('首尾帧模式至少需要 1 张参考图（选中或 @引用画布图片）作为起始帧。');
+                    setError('Keyframe mode requires at least one reference image (selected or @mentioned).');
                     setIsLoading(false);
                     return;
                 }
 
-                // 取第一张图片作为 Veo 的 image 参数（API 只接受单张）
+                // 鍙栫涓€寮犲浘鐗囦綔涓?Veo 鐨?image 鍙傛暟锛圓PI 鍙帴鍙楀崟寮狅級
                 const startFrame = allFrameRefs[0];
-                // 如有 ≥2 张参考图，在提示词中描述"从首帧过渡到尾帧"
+                // 濡傛湁 鈮? 寮犲弬鑰冨浘锛屽湪鎻愮ず璇嶄腑鎻忚堪"浠庨甯ц繃娓″埌灏惧抚"
                 const keyframePrompt = allFrameRefs.length >= 2
                     ? `Animate a smooth cinematic transition from the first frame to the second frame. ${effectivePrompt}`
                     : `Animate this image with smooth motion. ${effectivePrompt}`;
@@ -2269,15 +2556,15 @@ const App: React.FC = () => {
                     { href: startFrame.href, mimeType: startFrame.mimeType }
                 );
 
-                // 将视频 Blob 转为 URL 并获取尺寸元数据
-                setProgressMessage('处理视频中...');
+                // 灏嗚棰?Blob 杞负 URL 骞惰幏鍙栧昂瀵稿厓鏁版嵁
+                setProgressMessage('处理中...');
                 const videoUrl = URL.createObjectURL(videoBlob);
                 const video = document.createElement('video');
 
                 video.onloadedmetadata = () => {
                     if (!svgRef.current) return;
 
-                    // 限制最大尺寸 800px 以免画布元素过大
+                    // 闄愬埗鏈€澶у昂瀵?800px 浠ュ厤鐢诲竷鍏冪礌杩囧ぇ
                     let newWidth = video.videoWidth;
                     let newHeight = video.videoHeight;
                     const MAX_DIM = 800;
@@ -2287,7 +2574,7 @@ const App: React.FC = () => {
                         else { newHeight = MAX_DIM; newWidth = MAX_DIM * ratio; }
                     }
 
-                    // 放置到画布可视区域中心
+                    // 鏀剧疆鍒扮敾甯冨彲瑙嗗尯鍩熶腑蹇?
                     const svgBounds = svgRef.current!.getBoundingClientRect();
                     const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
                     const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
@@ -2301,7 +2588,7 @@ const App: React.FC = () => {
                     commitAction(prev => [...prev, newVideoElement]);
                     setSelectedElementIds([newVideoElement.id]);
 
-                    // 截取视频第一帧作为缩略图保存到历史记录
+                    // 鎴彇瑙嗛绗竴甯т綔涓虹缉鐣ュ浘淇濆瓨鍒板巻鍙茶褰?
                     try {
                         const canvas = document.createElement('canvas');
                         canvas.width = video.videoWidth;
@@ -2320,15 +2607,16 @@ const App: React.FC = () => {
                                 mediaType: 'video',
                             });
                         }
-                    } catch { /* 缩略图失败不影响主流程 */ }
+                    } catch { /* 缂╃暐鍥惧け璐ヤ笉褰卞搷涓绘祦绋?*/ }
 
                     setIsLoading(false);
                 };
-                video.onerror = () => { setError('无法加载生成的关键帧视频。'); setIsLoading(false); };
+                video.onerror = () => { setError('Failed to load generated keyframe video.'); setIsLoading(false); };
                 video.src = videoUrl;
             } catch (err) {
                 const error = err as Error;
                 setError(`首尾帧动画生成失败: ${error.message}`);
+                reportRuntimeIssue('首尾帧动画生成失败', error.stack || error.message);
                 console.error('Keyframe generation failed:', error);
                 setIsLoading(false);
             }
@@ -2410,7 +2698,7 @@ const App: React.FC = () => {
                     commitAction(prev => [...prev, newVideoElement]);
                     setSelectedElementIds([newVideoElement.id]);
 
-                    // 截取视频第一帧作为缩略图保存到历史记录
+                    // 鎴彇瑙嗛绗竴甯т綔涓虹缉鐣ュ浘淇濆瓨鍒板巻鍙茶褰?
                     try {
                         const canvas = document.createElement('canvas');
                         canvas.width = video.videoWidth;
@@ -2429,7 +2717,7 @@ const App: React.FC = () => {
                                 mediaType: 'video',
                             });
                         }
-                    } catch { /* 缩略图失败不影响主流程 */ }
+                    } catch { /* 缂╃暐鍥惧け璐ヤ笉褰卞搷涓绘祦绋?*/ }
 
                     setIsLoading(false);
                 };
@@ -2453,18 +2741,26 @@ const App: React.FC = () => {
 
         // IMAGE GENERATION LOGIC
         try {
-            const isEditing = selectedElementIds.length > 0;
-
-            // Collect @mention reference images (閸欘亜褰囬崶鍓у缁鍘撶槐鐙呯礉閹烘帡娅庡鎻掓躬 selection 娑擃厾娈?
+            // Collect @mention reference images (闁告瑯浜滆ぐ鍥炊閸撗冾暬缂侇偉顕ч崢鎾舵閻欏懐绀夐柟鐑樺浮濞呭骸顔忛幓鎺撹含 selection 濞戞搩鍘惧▓?
             const mentionedImageElements = mentionedElementIds
                 .map(id => elements.find(el => el.id === id))
                 .filter((el): el is ImageElement => !!el && el.type === 'image' && !selectedElementIds.includes(el.id));
+            const canUseReferenceEditing = supportsReferenceEditing;
+            const hasReferenceContext = selectedElementIds.length > 0
+                || mentionedImageElements.length > 0
+                || attachmentReferenceImages.length > 0
+                || characterReferenceImages.length > 0;
+
+            if (!canUseReferenceEditing && hasReferenceContext) {
+                setProgressMessage('当前模型不支持参考图编辑，已自动切换为纯文本生成。');
+            }
+
+            const isEditing = canUseReferenceEditing && selectedElementIds.length > 0;
+            const effectiveMentionedImageElements = canUseReferenceEditing ? mentionedImageElements : [];
+            const effectiveAttachmentReferenceImages = canUseReferenceEditing ? attachmentReferenceImages : [];
+            const effectiveCharacterReferenceImages = canUseReferenceEditing ? characterReferenceImages : [];
 
             if (isEditing) {
-                if (!supportsReferenceEditing) {
-                    setError('The current image model does not support whiteboard-based editing or compositing. Please switch to a Gemini or Imagen image model.');
-                    return;
-                }
                 const selectedElements = elements.filter(el => selectedElementIds.includes(el.id));
                 const imageElements = selectedElements.filter(el => el.type === 'image') as ImageElement[];
                 const maskPaths = selectedElements.filter(el => el.type === 'path' && el.strokeOpacity && el.strokeOpacity < 1) as PathElement[];
@@ -2526,18 +2822,20 @@ const App: React.FC = () => {
                 });
                 const imagesToProcess = await Promise.all(imagePromises);
 
-                // Append @mentioned reference images — 按 prompt 中出现顺序排列
-                const { prompt: mentionPrompt, orderedMentionImages } = buildMentionAwarePrompt(effectivePrompt, mentionedImageElements);
+                // Append @mentioned reference images 鈥?鎸?prompt 涓嚭鐜伴『搴忔帓鍒?
+                const { prompt: mentionPrompt, orderedMentionImages } = buildMentionAwarePrompt(effectivePrompt, effectiveMentionedImageElements);
                 const result = await editImage(
-                    [...imagesToProcess, ...orderedMentionImages, ...attachmentReferenceImages, ...characterReferenceImages],
+                    [...imagesToProcess, ...orderedMentionImages, ...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages],
                     mentionPrompt
                 );
 
-                if (result.newImageBase64 && result.newImageMimeType) {
-                    const { newImageBase64, newImageMimeType } = result;
+                if ((result.newImageBase64 && result.newImageMimeType) || result.newImageUrl) {
+                    const imageSrc = result.newImageUrl || `data:${result.newImageMimeType};base64,${result.newImageBase64}`;
+                    const imageMimeType = result.newImageMimeType || 'image/jpeg';
                     
                     const img = new Image();
                     img.onload = () => {
+                        const placedSize = getInitialDisplayImageSize(img.width, img.height);
                         let minX = Infinity, minY = Infinity, maxX = -Infinity;
                         selectedElements.forEach(el => {
                             const bounds = getElementBounds(el);
@@ -2550,8 +2848,8 @@ const App: React.FC = () => {
                         
                         const newImage: ImageElement = {
                             id: generateId(), type: 'image', x, y, name: imageOutputName,
-                            width: img.width, height: img.height,
-                            href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                            width: placedSize.width, height: placedSize.height,
+                            href: imageSrc, mimeType: imageMimeType,
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
@@ -2565,34 +2863,31 @@ const App: React.FC = () => {
                         });
                     };
                     img.onerror = () => setError('Failed to load the generated image.');
-                    img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
-                } else {
-                    setError(result.textResponse || 'Generation failed to produce an image.');
+                    img.src = imageSrc;
+                } else { 
+                    setError(result.textResponse || 'Generation failed to produce an image.'); 
                 }
 
-            } else if (mentionedImageElements.length > 0) {
-                if (!supportsReferenceEditing) {
-                    setError('The current image model does not support @ reference image generation. Please switch to a Gemini or Imagen image model.');
-                    return;
-                }
-                // No canvas selection, but user @mentioned image elements — 按 prompt 引用顺序排列
+            } else if (effectiveMentionedImageElements.length > 0) {
+                // No canvas selection, but user @mentioned image elements 鈥?鎸?prompt 寮曠敤椤哄簭鎺掑垪
                 setProgressMessage('Generating with reference images...');
-                const { prompt: mentionPrompt2, orderedMentionImages: orderedRefs } = buildMentionAwarePrompt(effectivePrompt, mentionedImageElements);
-                const result = await editImage([...orderedRefs, ...attachmentReferenceImages, ...characterReferenceImages], mentionPrompt2);
+                const { prompt: mentionPrompt2, orderedMentionImages: orderedRefs } = buildMentionAwarePrompt(effectivePrompt, effectiveMentionedImageElements);
+                const result = await editImage([...orderedRefs, ...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages], mentionPrompt2);
 
                 if (result.newImageBase64 && result.newImageMimeType) {
                     const { newImageBase64, newImageMimeType } = result;
                     const img = new Image();
                     img.onload = () => {
                         if (!svgRef.current) return;
+                        const placedSize = getInitialDisplayImageSize(img.width, img.height);
                         const svgBounds = svgRef.current.getBoundingClientRect();
                         const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
                         const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
-                        const x = canvasPoint.x - (img.width / 2);
-                        const y = canvasPoint.y - (img.height / 2);
+                        const x = canvasPoint.x - (placedSize.width / 2);
+                        const y = canvasPoint.y - (placedSize.height / 2);
                         const newImage: ImageElement = {
                             id: generateId(), type: 'image', x, y, name: imageOutputName,
-                            width: img.width, height: img.height,
+                            width: placedSize.width, height: placedSize.height,
                             href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
                         };
                         commitAction(prev => [...prev, newImage]);
@@ -2614,35 +2909,39 @@ const App: React.FC = () => {
 
             } else {
                 // Generate from scratch
-                const baseRefs = [...attachmentReferenceImages, ...characterReferenceImages];
-                if (baseRefs.length > 0 && !supportsReferenceEditing) {
-                    setError('The current image model does not support reference image generation. Please switch to a Gemini or Imagen image model.');
-                    return;
-                }
+                const baseRefs = [...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages];
+                const requestedImageSize = buildImageSizeByRatio(imageResolution, imageAspectRatio);
                 const result = baseRefs.length > 0
                     ? await editImage(baseRefs, effectivePrompt)
                     : await generateImageWithProvider(
                         effectivePrompt,
                         modelPreference.imageModel,
-                        getPreferredApiKey('image', imageProvider)
+                        getPreferredApiKey('image', imageProvider),
+                        {
+                            size: requestedImageSize,
+                            aspectRatio: imageAspectRatio,
+                            resolution: imageResolution,
+                        }
                     );
 
-                if (result.newImageBase64 && result.newImageMimeType) {
-                    const { newImageBase64, newImageMimeType } = result;
-                    
+                if ((result.newImageBase64 && result.newImageMimeType) || result.newImageUrl) {
+                    const imageSrc = result.newImageUrl || `data:${result.newImageMimeType};base64,${result.newImageBase64}`;
+                    const imageMimeType = result.newImageMimeType || 'image/jpeg';
+
                     const img = new Image();
                     img.onload = () => {
                         if (!svgRef.current) return;
+                        const placedSize = getInitialDisplayImageSize(img.width, img.height);
                         const svgBounds = svgRef.current.getBoundingClientRect();
                         const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
                         const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
-                        const x = canvasPoint.x - (img.width / 2);
-                        const y = canvasPoint.y - (img.height / 2);
-                        
+                        const x = canvasPoint.x - (placedSize.width / 2);
+                        const y = canvasPoint.y - (placedSize.height / 2);
+
                         const newImage: ImageElement = {
                             id: generateId(), type: 'image', x, y, name: imageOutputName,
-                            width: img.width, height: img.height,
-                            href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                            width: placedSize.width, height: placedSize.height,
+                            href: imageSrc, mimeType: imageMimeType,
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
@@ -2656,9 +2955,9 @@ const App: React.FC = () => {
                         });
                     };
                     img.onerror = () => setError('Failed to load the generated image.');
-                    img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
-                } else { 
-                    setError(result.textResponse || 'Generation failed to produce an image.'); 
+                    img.src = imageSrc;
+                } else {
+                    setError(result.textResponse || 'Generation failed to produce an image.');
                 }
             }
         } catch (err) {
@@ -2666,15 +2965,16 @@ const App: React.FC = () => {
             let friendlyMessage = `生成出错: ${error.message}`;
 
             if (error.message && (error.message.includes('API_KEY_INVALID') || error.message.includes('API key not valid'))) {
-                friendlyMessage = 'API Key 无效。请打开设置，检查或重新添加你的 API Key。';
+                friendlyMessage = 'Invalid API key. Please check and re-add your API key in Settings.';
             } else if (error.message && (error.message.includes('429') || error.message.toUpperCase().includes('RESOURCE_EXHAUSTED'))) {
-                friendlyMessage = 'API 调用配额已用完。请检查你的 Google AI Studio 计划，或稍后重试。';
+                friendlyMessage = 'API quota exceeded. Please check your provider plan or try again later.';
             } else if (error.message && (error.message.includes('not configured') || error.message.includes('not set'))) {
-                friendlyMessage = '未配置 API Key。请先打开设置 → API 配置，添加你的 API Key。';
+                friendlyMessage = 'API key is missing. Please add your API key in Settings -> API config.';
             }
 
             setError(friendlyMessage); 
             console.error("Generation failed:", error);
+            reportRuntimeIssue('生成失败', error.stack || error.message);
         } finally { 
             setIsLoading(false); 
         }
@@ -2711,8 +3011,7 @@ const App: React.FC = () => {
     const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
     const handleDrop = useCallback((e: React.DragEvent) => { 
         e.preventDefault(); 
-        const text = e.dataTransfer.getData('text/plain');
-        if (text && handleAssetDropRef.current) { handleAssetDropRef.current(e); return; }
+        if (handleAssetDropRef.current && handleAssetDropRef.current(e)) return;
         if (e.dataTransfer.files && e.dataTransfer.files[0]) { handleAddImageElement(e.dataTransfer.files[0]); }
     }, [handleAddImageElement]);
 
@@ -3002,6 +3301,13 @@ const App: React.FC = () => {
          const THUMB_WIDTH = 120;
          const THUMB_HEIGHT = 80;
 
+        const recentImage = [...elements]
+            .reverse()
+            .find((el): el is ImageElement => el.type === 'image' && typeof el.href === 'string' && el.href.length > 0);
+        if (recentImage) {
+            return recentImage.href;
+        }
+
         if (elements.length === 0) {
             const emptySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${THUMB_WIDTH}" height="${THUMB_HEIGHT}"><rect width="100%" height="100%" fill="${bgColor}" /></svg>`;
             return `data:image/svg+xml;base64,${btoa(emptySvg)}`;
@@ -3034,7 +3340,7 @@ const App: React.FC = () => {
                 return `<path d="${pathData}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${el.strokeOpacity || 1}" />`;
              }
              if (el.type === 'image') {
-                 return `<image href="${el.href}" x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" />`;
+                 return `<image href="${escapeXmlAttr(el.href)}" x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" />`;
              }
              // Add other element types for more accurate thumbnails if needed
              return '';
@@ -3053,6 +3359,28 @@ const App: React.FC = () => {
                     <button onClick={() => setError(null)} className="ml-4 p-1 rounded-full hover:bg-red-200" title={t('common.close')} aria-label={t('common.close')}>
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
                     </button>
+                </div>
+            )}
+            {runtimeIssue && (
+                <div className="fixed bottom-4 right-4 z-[130] w-[min(560px,92vw)] rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900 shadow-2xl">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-sm font-semibold">Runtime Error Captured</div>
+                            <div className="mt-0.5 text-xs break-words">{runtimeIssue.title}</div>
+                            {runtimeIssue.detail && (
+                                <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg bg-amber-100/70 p-2 text-[11px] leading-4">
+{runtimeIssue.detail}
+                                </pre>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            className="rounded-md px-2 py-1 text-xs font-medium hover:bg-amber-200"
+                            onClick={() => setRuntimeIssue(null)}
+                        >
+                            关闭
+                        </button>
+                    </div>
                 </div>
             )}
             <WorkspaceSidebar
@@ -3138,12 +3466,12 @@ const App: React.FC = () => {
                 clearKeysOnExit={clearKeysOnExit}
                 setClearKeysOnExit={setClearKeysOnExit}
             />
-            {/* 新用户引导弹窗 — 无 API Key 时自动出现 */}
+            {/* 鏂扮敤鎴峰紩瀵煎脊绐?鈥?鏃?API Key 鏃惰嚜鍔ㄥ嚭鐜?*/}
             <OnboardingWizard
                 isOpen={showOnboarding}
                 onClose={() => {
                     setShowOnboarding(false);
-                    localStorage.setItem('onboarding.skipped', 'true');
+                    safeLocalStorageSetItem('onboarding.skipped', 'true');
                 }}
                 onAddApiKey={handleAddApiKey}
                 resolvedTheme={resolvedTheme}
@@ -3216,9 +3544,6 @@ const App: React.FC = () => {
                     style={{ cursor }}
                 >
                     <defs>
-                        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                            <circle cx="1" cy="1" r="1" className="fill-gray-400 opacity-50"/>
-                        </pattern>
                          {elements.map(el => {
                             if (el.type === 'image' && el.borderRadius && el.borderRadius > 0) {
                                 const clipPathId = `clip-${el.id}`;
@@ -3237,8 +3562,6 @@ const App: React.FC = () => {
                         })}
                     </defs>
                     <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
-                        <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
-                        
                         {elements.map(el => {
                             if (!isElementVisible(el, elements)) return null;
 
@@ -3577,23 +3900,22 @@ const App: React.FC = () => {
                     );
                 })()}
             </div>
-            {!croppingState && (
-                <div 
-                    className="compact-prompt-dock absolute bottom-0 left-0 right-0 z-[40] transition-all duration-300 ease-out flex justify-center pointer-events-none"
-                    style={{
-                        paddingLeft: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${isLayerMinimized ? chromeMetrics.outerGap : chromeMetrics.sidebarWidth + chromeMetrics.outerGap + 8}px`,
-                        paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
-                        paddingBottom: `${chromeMetrics.promptDockBottom}px`
-                    }}
-                >
-                    <div className="compact-prompt-dock__inner pointer-events-auto w-full transition-transform hover:-translate-y-0.5 duration-300 drop-shadow-xl" style={{ maxWidth: `${chromeMetrics.promptMaxWidth}px` }}>
-                        <PromptBar 
+            <div 
+                className="compact-prompt-dock fixed bottom-0 left-0 right-0 z-[80] transition-all duration-300 ease-out flex justify-center pointer-events-none"
+                style={{
+                    paddingLeft: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${isLayerMinimized ? chromeMetrics.outerGap : chromeMetrics.sidebarWidth + chromeMetrics.outerGap + 8}px`,
+                    paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
+                    paddingBottom: `${chromeMetrics.promptDockBottom}px`
+                }}
+            >
+                <div className="compact-prompt-dock__inner pointer-events-auto w-full transition-transform hover:-translate-y-0.5 duration-300 drop-shadow-xl" style={{ maxWidth: `${chromeMetrics.promptMaxWidth}px` }}>
+                    <PromptBar 
                             t={t}
                             theme={resolvedTheme}
                             compactMode={chromeMetrics.isTablet}
                             prompt={prompt} 
                             setPrompt={setPrompt} 
-                            onGenerate={() => handleGenerate(undefined, 'prompt')} 
+                            onGenerate={(nextPrompt) => handleGenerate(nextPrompt, 'prompt')} 
                             isLoading={isLoading} 
                             isSelectionActive={isSelectionActive} 
                             selectedElementCount={selectedElementIds.length}
@@ -3604,6 +3926,12 @@ const App: React.FC = () => {
                             setGenerationMode={setGenerationMode}
                             videoAspectRatio={videoAspectRatio}
                             setVideoAspectRatio={setVideoAspectRatio}
+                            imageResolution={imageResolution}
+                            imageResolutionOptions={[...IMAGE_RESOLUTION_OPTIONS]}
+                            setImageResolution={setImageResolution}
+                            imageAspectRatio={imageAspectRatio}
+                            imageAspectRatioOptions={[...IMAGE_ASPECT_RATIO_OPTIONS]}
+                            setImageAspectRatio={setImageAspectRatio}
                             selectedTextModel={modelPreference.textModel}
                             selectedImageModel={modelPreference.imageModel}
                             selectedVideoModel={modelPreference.videoModel}
@@ -3635,9 +3963,8 @@ const App: React.FC = () => {
                             userApiKeys={userApiKeys}
                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
                         />
-                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };

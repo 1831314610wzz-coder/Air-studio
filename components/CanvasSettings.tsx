@@ -47,8 +47,8 @@ const capabilityLabels: Record<AICapability, string> = {
 };
 
 const modelOptions = {
-    text: ['gemini-2.5-pro', 'gpt-4o-mini', 'claude-3-5-sonnet', 'qwen-max'],
-    image: ['gemini-2.5-flash-image', 'imagen-4.0-generate-001', 'dall-e-3', 'sdxl'],
+    text: ['gemini-2.5-pro', 'gpt-4o-mini', 'gpt-5-nano', 'gpt-4.1-nano', 'claude-3-5-sonnet', 'qwen-max'],
+    image: ['gemini-2.5-flash-image', 'imagen-4.0-generate-001', 'dall-e-3', 'sdxl', 'nano-banana', 'nano-banana-2', 'nano-banana-pro'],
     video: ['veo-2.0-generate-001'],
     agent: ['banana-vision-v1'],
 };

@@ -213,7 +213,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     if (isCropping) {
         return (
             <div
-                className="absolute top-3 z-[50] flex w-52 flex-col gap-3 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
+                className="fixed top-3 z-[90] flex w-52 flex-col gap-3 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
                 style={{ left: `${leftPosition}px`, top: `${topOffset}px`, transform: `scale(${compactScale})`, transformOrigin: 'top left', transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)' }}
             >
                 <div className="text-sm font-semibold text-neutral-900">{t('toolbar.crop.title')}</div>
@@ -239,7 +239,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     return (
         <div
-            className={`absolute z-[40] flex flex-col items-center gap-1.5 rounded-[24px] border px-1.5 py-2.5 shadow-[0_20px_48px_rgba(15,23,42,0.24)] ${
+            className={`fixed z-[90] flex flex-col items-center gap-1.5 rounded-[24px] border px-1.5 py-2.5 shadow-[0_20px_48px_rgba(15,23,42,0.24)] ${
                 isDark ? 'border-[#2A3140] bg-[#12151B] text-white' : 'border-neutral-200 bg-white text-[#111827]'
             }`}
             style={{

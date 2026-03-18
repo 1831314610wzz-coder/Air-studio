@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
     CharacterLockProfile,
     ChatAttachment,
@@ -21,7 +21,7 @@ interface PromptBarProps {
     compactMode?: boolean;
     prompt: string;
     setPrompt: (prompt: string) => void;
-    onGenerate: () => void;
+    onGenerate: (promptOverride?: string) => void;
     isLoading: boolean;
     isSelectionActive: boolean;
     selectedElementCount: number;
@@ -32,6 +32,12 @@ interface PromptBarProps {
     setGenerationMode: (mode: GenerationMode) => void;
     videoAspectRatio: '16:9' | '9:16';
     setVideoAspectRatio: (ratio: '16:9' | '9:16') => void;
+    imageResolution?: string;
+    imageResolutionOptions?: string[];
+    setImageResolution?: (resolution: string) => void;
+    imageAspectRatio?: string;
+    imageAspectRatioOptions?: string[];
+    setImageAspectRatio?: (ratio: string) => void;
     selectedTextModel?: string;
     selectedImageModel?: string;
     selectedVideoModel?: string;
@@ -55,18 +61,18 @@ interface PromptBarProps {
     characterLocks?: CharacterLockProfile[];
     activeCharacterLockId?: string | null;
     onSetActiveCharacterLock?: (id: string | null) => void;
-    // API 配置管理
+    // API 閰嶇疆绠＄悊
     apiConfigs?: APIConfig[];
     activeApiConfigId?: string | null;
     activeApiModelId?: string | null;
     onApiConfigChange?: (id: string) => void;
     onApiModelChange?: (modelId: string) => void;
-    // API Key 联动
+    // API Key 鑱斿姩
     userApiKeys?: UserApiKey[];
     onOpenSettings?: () => void;
 }
 
-type ExpandPanel = 'mode' | 'model' | 'more' | null;
+type ExpandPanel = 'mode' | 'model' | 'resolution' | 'imageAspect' | 'more' | null;
 
 const TYPE_LABELS: Record<Element['type'], string> = {
     image: '图片',
@@ -91,6 +97,14 @@ function getModeLabel(mode: GenerationMode): string {
 
 function getModelLabel(mode: GenerationMode, imageModel?: string, videoModel?: string): string {
     return mode === 'video' ? videoModel || '选择视频模型' : imageModel || '选择图片模型';
+}
+
+function getResolutionLabel(resolution?: string): string {
+    return resolution || '1024x1024';
+}
+
+function getImageAspectRatioLabel(ratio?: string): string {
+    return ratio || '1:1';
 }
 
 const PopoverHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
@@ -137,6 +151,12 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     setGenerationMode,
     videoAspectRatio,
     setVideoAspectRatio,
+    imageResolution = '1024x1024',
+    imageResolutionOptions = ['512x512', '768x768', '1024x1024', '1536x1536'],
+    setImageResolution,
+    imageAspectRatio = '1:1',
+    imageAspectRatioOptions = ['1:1', '4:3', '3:4', '16:9', '9:16'],
+    setImageAspectRatio,
     selectedTextModel,
     selectedImageModel,
     selectedVideoModel,
@@ -186,7 +206,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }`;
     const shellClass = `${compactMode ? 'rounded-[18px]' : 'rounded-[20px]'} ${isDark ? 'border-[#2A3140] bg-[#12151B] shadow-[0_20px_50px_rgba(0,0,0,0.24)]' : 'border-[#E4E7EC] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.10)]'}`;
 
-    /** 将画布元素转换为 RichPromptEditor 需要的 MentionItem[] */
+    /** 灏嗙敾甯冨厓绱犺浆鎹负 RichPromptEditor 闇€瑕佺殑 MentionItem[] */
     const canvasItems = useMemo<MentionItem[]>(() =>
         canvasElements
             .filter(el => el.isVisible !== false)
@@ -206,7 +226,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         return `已选中 ${selectedElementCount} 个元素，补充组合生成描述`;
     }, [isSelectionActive, selectedElementCount]);
 
-    /** 编辑器文本 + mention 变化时同步到父组件 */
+    /** 缂栬緫鍣ㄦ枃鏈?+ mention 鍙樺寲鏃跺悓姝ュ埌鐖剁粍浠?*/
     const handleEditorChange = useCallback((plainText: string, json: Record<string, unknown>) => {
         setPrompt(plainText);
         const mentions = extractMentions(json);
@@ -214,12 +234,18 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         onMentionedElementIds?.(uniqueIds);
     }, [setPrompt, onMentionedElementIds]);
 
-    /** 编辑器 Enter 提交 */
+    /** 缂栬緫鍣?Enter 鎻愪氦 */
     const handleEditorSubmit = useCallback(() => {
-        if (prompt.trim() && !isLoading) onGenerate();
-    }, [prompt, isLoading, onGenerate]);
+        if (isLoading) return;
+        const latest = (richEditorRef.current?.getText() ?? prompt).trim();
+        if (!latest) return;
+        if (latest !== prompt) {
+            setPrompt(latest);
+        }
+        onGenerate(latest);
+    }, [prompt, isLoading, onGenerate, setPrompt]);
 
-    /** 外部 prompt 被清空时（如切换画板、生成完成后），同步清空富文本编辑器 */
+    /** 澶栭儴 prompt 琚竻绌烘椂锛堝鍒囨崲鐢绘澘銆佺敓鎴愬畬鎴愬悗锛夛紝鍚屾娓呯┖瀵屾枃鏈紪杈戝櫒 */
     useEffect(() => {
         if (!prompt && richEditorRef.current) {
             const editorText = richEditorRef.current.getText();
@@ -363,10 +389,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     )}
                 </div>
 
-                <div className={`relative flex items-center justify-between gap-3 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'} ${isDark ? 'border-[#2A3140]' : 'border-[#EEF1F5]'}`}>
-                    <div className="min-w-0 flex-1 overflow-visible">
-                        <div className="flex flex-wrap items-center gap-2">
-                            {/* API Key 状态指示器 — 与设置面板联动 */}
+                <div className={`relative border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'} ${isDark ? 'border-[#2A3140]' : 'border-[#EEF1F5]'}`}>
+                    <div className="flex w-full items-center gap-2">
+                        <div className="min-w-0 flex-1 overflow-visible">
+                            <div className="flex flex-wrap items-center gap-2 pr-1">
+                            {/* API Key 鐘舵€佹寚绀哄櫒 鈥?涓庤缃潰鏉胯仈鍔?*/}
                             {(() => {
                                 const defaultKey = userApiKeys.find(k => k.isDefault);
                                 const keyCount = userApiKeys.length;
@@ -379,7 +406,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 isDark ? 'border-[#7A271A] text-[#FDA29B] hover:bg-[#3A1616]' : 'border-[#FECACA] text-[#DC2626] hover:bg-[#FEF3F2]'
                                             }`}
                                         >
-                                            🔑 未配置 API Key
+                                            未配置 API Key
                                         </button>
                                     );
                                 }
@@ -399,7 +426,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 );
                             })()}
 
-                            {/* API 配置选择器（高级配置） */}
+                            {/* API 閰嶇疆閫夋嫨鍣紙楂樼骇閰嶇疆锛?*/}
                             {apiConfigs.length > 0 && onApiConfigChange && onApiModelChange && (
                                 <ConfigSelector
                                     configs={apiConfigs}
@@ -416,12 +443,29 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     {getModeLabel(generationMode)}
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
-                                {expandedPanel === 'mode' && <div className={popoverCardClass}><PopoverHeader title="生成类型" subtitle="选择图片、视频或首尾帧模式" /><div className="space-y-1">{(['image', 'video', 'keyframe'] as GenerationMode[]).map(mode => <MenuOptionButton key={mode} label={getModeLabel(mode)} active={generationMode === mode} onClick={() => { setGenerationMode(mode); setExpandedPanel(null); }} />)}</div></div>}
+                                {expandedPanel === 'mode' && (
+                                    <div className={popoverCardClass}>
+                                        <PopoverHeader title="生成类型" subtitle="选择图片、视频或首尾帧模式" />
+                                        <div className="space-y-1">
+                                            {(['image', 'video', 'keyframe'] as GenerationMode[]).map(mode => (
+                                                <MenuOptionButton
+                                                    key={mode}
+                                                    label={getModeLabel(mode)}
+                                                    active={generationMode === mode}
+                                                    onClick={() => {
+                                                        setGenerationMode(mode);
+                                                        setExpandedPanel(null);
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="relative">
                                 <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
-                                    <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedImageModel, selectedVideoModel)}</span>
+                                    <span className="max-w-[150px] truncate">Model</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                                 {expandedPanel === 'model' && (
@@ -460,6 +504,68 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 )}
                             </div>
 
+                            {generationMode !== 'video' && (
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedPanel(prev => (prev === 'resolution' ? null : 'resolution'))}
+                                        className={`${triggerClass} ${expandedPanel === 'resolution' ? activeTriggerClass : ''}`}
+                                    >
+                                        <span className="max-w-[110px] truncate">{getResolutionLabel(imageResolution)}</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    </button>
+                                    {expandedPanel === 'resolution' && (
+                                        <div className={`${popoverCardClass} w-[220px]`}>
+                                            <PopoverHeader title="Resolution" subtitle="Image output size" />
+                                            <div className="space-y-1">
+                                                {imageResolutionOptions.map(size => (
+                                                    <MenuOptionButton
+                                                        key={size}
+                                                        label={size}
+                                                        active={imageResolution === size}
+                                                        onClick={() => {
+                                                            setImageResolution?.(size);
+                                                            setExpandedPanel(null);
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {generationMode !== 'video' && (
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedPanel(prev => (prev === 'imageAspect' ? null : 'imageAspect'))}
+                                        className={`${triggerClass} ${expandedPanel === 'imageAspect' ? activeTriggerClass : ''}`}
+                                    >
+                                        <span className="max-w-[90px] truncate">{getImageAspectRatioLabel(imageAspectRatio)}</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    </button>
+                                    {expandedPanel === 'imageAspect' && (
+                                        <div className={`${popoverCardClass} w-[200px]`}>
+                                            <PopoverHeader title="Ratio" subtitle="Image aspect ratio" />
+                                            <div className="space-y-1">
+                                                {imageAspectRatioOptions.map(ratio => (
+                                                    <MenuOptionButton
+                                                        key={ratio}
+                                                        label={ratio}
+                                                        active={imageAspectRatio === ratio}
+                                                        onClick={() => {
+                                                            setImageAspectRatio?.(ratio);
+                                                            setExpandedPanel(null);
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <button
                                 type="button"
                                 onClick={onAutoEnhanceToggle}
@@ -482,12 +588,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                             <div className="relative">
                                 <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} ${expandedPanel === 'more' ? activeTriggerClass : ''}`}>
-                                    更多
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    <span aria-hidden="true" className="text-base leading-none">···</span>
                                 </button>
                                 {expandedPanel === 'more' && (
                                     <div className={`${popoverCardClass} left-auto right-0 w-[320px]`}>
-                                        <PopoverHeader title="更多操作" subtitle="把次级能力收进来，底部按钮保持简洁" />
+                                        <PopoverHeader title="更多操作" subtitle="将次级能力收进这里，底部按钮保持简洁" />
                                         <div className="space-y-1">
                                             <MenuOptionButton
                                                 label="上传参考图"
@@ -556,36 +661,43 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     </div>
                                 )}
                             </div>
+                            </div>
                         </div>
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (prompt.trim() && !isLoading) onGenerate();
-                        }}
-                        disabled={isLoading || !prompt.trim()}
-                        aria-label={t('promptBar.generate')}
-                        title={t('promptBar.generate')}
-                        className={`flex h-9 min-w-[72px] items-center justify-center rounded-xl px-3 transition disabled:cursor-not-allowed ${isDark ? 'bg-[#F3F4F6] text-[#111827] hover:bg-white disabled:bg-[#3A4458] disabled:text-[#98A2B3]' : 'bg-[#111827] text-white hover:bg-[#0F172A] disabled:bg-[#D0D5DD]'}`}
-                    >
-                        {isLoading ? (
-                            <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
-                            </svg>
-                        ) : (
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-semibold">生成</span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const latest = (richEditorRef.current?.getText() ?? prompt).trim();
+                                if (!latest || isLoading) return;
+                                if (latest !== prompt) {
+                                    setPrompt(latest);
+                                }
+                                onGenerate(latest);
+                            }}
+                            disabled={isLoading}
+                            className={`shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isDark
+                                    ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]'
+                                    : 'border-[#D0D5DD] bg-white text-[#344054] hover:bg-[#F8FAFC]'
+                            }`}
+                            aria-label="发送"
+                            title="发送（Enter）"
+                        >
+                            {isLoading ? (
+                                <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
+                                </svg>
+                            ) : (
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                     <path d="M5 12h14" />
                                     <path d="m12 5 7 7-7 7" />
                                 </svg>
-                            </div>
-                        )}
-                    </button>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+

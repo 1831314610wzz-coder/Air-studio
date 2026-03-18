@@ -178,27 +178,28 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     };
 
     const handleLibraryDragStart = (event: React.DragEvent, item: AssetItem) => {
-        event.dataTransfer.setData('text/plain', JSON.stringify({ __makingAsset: true, item }));
+        const payload = JSON.stringify({ __makingAsset: true, item });
+        event.dataTransfer.setData('application/x-making-asset', payload);
+        event.dataTransfer.setData('text/plain', payload);
         event.dataTransfer.effectAllowed = 'copy';
     };
 
     const handleHistoryDragStart = (event: React.DragEvent, item: GenerationHistoryItem) => {
-        event.dataTransfer.setData(
-            'text/plain',
-            JSON.stringify({
-                __makingAsset: true,
-                item: {
-                    id: item.id,
-                    name: item.name || 'Generated',
-                    category: 'scene',
-                    dataUrl: item.dataUrl,
-                    mimeType: item.mimeType,
-                    width: item.width,
-                    height: item.height,
-                    createdAt: item.createdAt,
-                },
-            })
-        );
+        const payload = JSON.stringify({
+            __makingAsset: true,
+            item: {
+                id: item.id,
+                name: item.name || 'Generated',
+                category: 'scene',
+                dataUrl: item.dataUrl,
+                mimeType: item.mimeType,
+                width: item.width,
+                height: item.height,
+                createdAt: item.createdAt,
+            },
+        });
+        event.dataTransfer.setData('application/x-making-asset', payload);
+        event.dataTransfer.setData('text/plain', payload);
         event.dataTransfer.effectAllowed = 'copy';
     };
 

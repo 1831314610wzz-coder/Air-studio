@@ -15,7 +15,30 @@ export const loadGenerationHistory = (): GenerationHistoryItem[] => {
 };
 
 export const saveGenerationHistory = (items: GenerationHistoryItem[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    // Never throw to UI layer. Quota errors here can unmount the whole React tree.
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        return;
+    } catch {
+        // Fallback: trim from the tail until storage succeeds.
+        let trimmed = [...items];
+        while (trimmed.length > 0) {
+            trimmed = trimmed.slice(0, -1);
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+                return;
+            } catch {
+                // keep trimming
+            }
+        }
+
+        // Last resort: clear corrupted/oversized history entry.
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch {
+            // swallow all storage failures
+        }
+    }
 };
 
 export const addGenerationHistoryItem = (
