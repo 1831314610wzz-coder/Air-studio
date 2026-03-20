@@ -20,7 +20,7 @@ import { loadAssetLibrary, addAsset, removeAsset, renameAsset } from './utils/as
 import { loadGenerationHistory, addGenerationHistoryItem } from './utils/generationHistory';
 import { editImage, generateImageFromText, generateVideo, setGeminiRuntimeConfig, enhancePromptWithGemini } from './services/geminiService';
 import { splitImageByBanana, runBananaImageAgent, setBananaRuntimeConfig } from './services/bananaService';
-import { enhancePromptWithProvider, generateImageWithProvider, inferProviderFromModel } from './services/aiGateway';
+import { enhancePromptWithAgentPipeline, enhancePromptWithProvider, generateImageWithProvider, inferProviderFromModel } from './services/aiGateway';
 import { fileToDataUrl } from './utils/fileUtils';
 import { translations } from './translations';
 import { useAPIConfigStore } from './src/store/api-config-store';
@@ -1163,20 +1163,76 @@ const App: React.FC = () => {
         setError(null);
     }, [selectedSingleImage, characterLocks.length]);
 
+    const getPromptMemoryExamples = useCallback((targetPrompt: string): string[] => {
+        const normalize = (text: string) =>
+            text
+                .toLowerCase()
+                .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+                .split(/\s+/)
+                .filter(token => token.length >= 3);
+
+        const targetTokens = new Set(normalize(targetPrompt));
+        if (targetTokens.size === 0) return [];
+
+        const scored = generationHistory
+            .filter(item => item.mediaType !== 'video' && !!item.prompt?.trim())
+            .map(item => {
+                const promptText = item.prompt.trim();
+                const tokens = new Set(normalize(promptText));
+                let overlap = 0;
+                targetTokens.forEach(token => {
+                    if (tokens.has(token)) overlap += 1;
+                });
+                const jaccard = overlap / Math.max(1, targetTokens.size + tokens.size - overlap);
+                const qualityBoost = Math.min(0.35, (item.promptScore || 0) / 200);
+                const modelBoost = item.promptModel === modelPreference.imageModel ? 0.12 : 0;
+                const ageWeeks = Math.max(0, (Date.now() - item.createdAt) / (1000 * 60 * 60 * 24 * 7));
+                const recencyBoost = ageWeeks === 0 ? 0.08 : Math.min(0.08, 0.08 / Math.max(1, ageWeeks));
+                return {
+                    prompt: promptText,
+                    score: jaccard + qualityBoost + modelBoost + recencyBoost,
+                    createdAt: item.createdAt,
+                    promptScore: item.promptScore || 0,
+                };
+            })
+            .filter(item => item.score > 0.02)
+            .sort((a, b) => (b.score - a.score) || (b.promptScore - a.promptScore) || (b.createdAt - a.createdAt));
+
+        const unique = new Set<string>();
+        const examples: string[] = [];
+        for (const item of scored) {
+            if (unique.has(item.prompt)) continue;
+            unique.add(item.prompt);
+            examples.push(item.prompt);
+            if (examples.length >= 3) break;
+        }
+        return examples;
+    }, [generationHistory, modelPreference.imageModel]);
+
     const handleEnhancePrompt = useCallback(async (payload: {
         prompt: string;
         mode: PromptEnhanceMode;
         stylePreset?: string;
+        memoryExamples?: string[];
     }) => {
         setIsEnhancingPrompt(true);
         try {
             const provider = inferProviderFromModel(modelPreference.textModel);
             const key = getPreferredApiKey('text', provider);
-            return await enhancePromptWithProvider(payload, modelPreference.textModel, key);
+            const memoryExamples = payload.memoryExamples?.length
+                ? payload.memoryExamples
+                : getPromptMemoryExamples(payload.prompt);
+            const enhancePayload = { ...payload, memoryExamples };
+            try {
+                return await enhancePromptWithAgentPipeline(enhancePayload, modelPreference.textModel, key);
+            } catch (pipelineError) {
+                console.warn('[PromptPipeline] multi-agent path failed, fallback to single-step enhance:', pipelineError);
+                return await enhancePromptWithProvider(enhancePayload, modelPreference.textModel, key);
+            }
         } finally {
             setIsEnhancingPrompt(false);
         }
-    }, [getPreferredApiKey, modelPreference.textModel]);
+    }, [getPreferredApiKey, getPromptMemoryExamples, modelPreference.textModel]);
 
     const handleSetActiveCharacterLock = useCallback((id: string | null) => {
         setActiveCharacterLockId(id);
@@ -1188,25 +1244,68 @@ const App: React.FC = () => {
     const saveGenerationToHistory = useCallback((payload: {
         name?: string;
         dataUrl: string;
+        originalDataUrl?: string;
         mimeType: string;
         width: number;
         height: number;
         prompt: string;
         mediaType?: 'image' | 'video';
+        promptScore?: number;
+        promptModel?: string;
+        promptNotes?: string;
     }) => {
         const item: GenerationHistoryItem = {
             id: generateId(),
             name: payload.name,
             dataUrl: payload.dataUrl,
+            originalDataUrl: payload.originalDataUrl,
             mimeType: payload.mimeType,
             width: payload.width,
             height: payload.height,
             prompt: payload.prompt,
             createdAt: Date.now(),
             mediaType: payload.mediaType,
+            promptScore: payload.promptScore,
+            promptModel: payload.promptModel,
+            promptNotes: payload.promptNotes,
         };
 
         setGenerationHistory(prev => addGenerationHistoryItem(prev, item));
+    }, []);
+
+    const buildHistoryThumbnailFromImage = useCallback((
+        img: HTMLImageElement,
+        sourceMimeType: string,
+        fallbackDataUrl: string
+    ): { dataUrl: string; mimeType: string } => {
+        try {
+            const naturalWidth = img.naturalWidth || img.width;
+            const naturalHeight = img.naturalHeight || img.height;
+            if (!naturalWidth || !naturalHeight) {
+                return { dataUrl: fallbackDataUrl, mimeType: sourceMimeType };
+            }
+
+            const MAX_SIDE = 640;
+            const scale = Math.min(1, MAX_SIDE / Math.max(naturalWidth, naturalHeight));
+            const targetWidth = Math.max(1, Math.round(naturalWidth * scale));
+            const targetHeight = Math.max(1, Math.round(naturalHeight * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return { dataUrl: fallbackDataUrl, mimeType: sourceMimeType };
+            }
+
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+            const outputMimeType = sourceMimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+            const quality = outputMimeType === 'image/jpeg' ? 0.85 : undefined;
+            const dataUrl = canvas.toDataURL(outputMimeType, quality);
+            return { dataUrl, mimeType: outputMimeType };
+        } catch {
+            return { dataUrl: fallbackDataUrl, mimeType: sourceMimeType };
+        }
     }, []);
 
     const addChatAttachment = useCallback((payload: Omit<ChatAttachment, 'id'>) => {
@@ -2303,7 +2402,7 @@ const App: React.FC = () => {
         try {
             setIsLoading(true);
             setError(null);
-            setProgressMessage('BANANA Agent 正在移除背景...');
+            setProgressMessage('Removing background...');
             const result = await runBananaImageAgent(
                 { href: element.href, mimeType: element.mimeType },
                 'remove-background'
@@ -2312,7 +2411,7 @@ const App: React.FC = () => {
             setProgressMessage('Background removal completed.');
         } catch (err) {
             const error = err as Error;
-            setError(`BANANA background removal failed: ${error.message}`);
+            setError(`Background removal failed: ${error.message}`);
         } finally {
             setIsLoading(false);
             setTimeout(() => setProgressMessage(''), 1200);
@@ -2453,18 +2552,34 @@ const App: React.FC = () => {
     const handleGenerate = async (promptOverride?: string, source: 'prompt' | 'right' = 'prompt') => {
         if (isLoading) return;
         let rawPrompt = (promptOverride ?? prompt).trim();
+        let enhancedNegativePrompt = '';
+        let promptQualityScore: number | undefined;
+        let promptEnhanceNotes: string | undefined;
         if (!rawPrompt) {
             setError('Please enter a prompt.');
             return;
         }
 
         // 鑷姩娑﹁壊锛氬鏋滃紑鍏冲紑鍚笖鏈夋枃鏈?LLM 鑳藉姏鐨?Key锛屽垯鍏堟鼎鑹?
-        if (isAutoEnhanceEnabled && !promptOverride) {
+        const shouldAutoEnhance =
+            isAutoEnhanceEnabled &&
+            source === 'prompt' &&
+            (!promptOverride || promptOverride.trim() === prompt.trim());
+
+        if (shouldAutoEnhance) {
             try {
                 setProgressMessage('正在使用 LLM 润色提示词...');
                 const enhanced = await handleEnhancePrompt({ prompt: rawPrompt, mode: 'smart' });
                 if (enhanced?.enhancedPrompt?.trim()) {
                     rawPrompt = enhanced.enhancedPrompt.trim();
+                }
+                if (enhanced?.negativePrompt?.trim()) {
+                    enhancedNegativePrompt = enhanced.negativePrompt.trim();
+                }
+                promptEnhanceNotes = enhanced?.notes?.trim() || undefined;
+                const scoreMatch = enhanced?.notes?.match(/final=(\d+)/i) || enhanced?.notes?.match(/primary=(\d+)/i);
+                if (scoreMatch) {
+                    promptQualityScore = Number(scoreMatch[1]);
                 }
             } catch (e) {
                 console.warn('[Auto-Enhance] 润色失败，使用原始提示词:', e);
@@ -2494,9 +2609,19 @@ const App: React.FC = () => {
             const match = href.match(/^data:([^;]+);base64,/i);
             return match?.[1] || 'image/png';
         };
+        const promptWithQualityConstraints =
+            enhancedNegativePrompt && (generationMode === 'image' || generationMode === 'keyframe')
+                ? `${rawPrompt}\n\nNegative constraints (must avoid): ${enhancedNegativePrompt}`
+                : rawPrompt;
+
         const effectivePrompt = activeCharacterLock
-            ? `${activeCharacterLock.descriptor}\n\n${rawPrompt}`
-            : rawPrompt;
+            ? `${activeCharacterLock.descriptor}\n\n${promptWithQualityConstraints}`
+            : promptWithQualityConstraints;
+        const promptHistoryMeta = {
+            promptScore: promptQualityScore,
+            promptModel: modelPreference.imageModel,
+            promptNotes: promptEnhanceNotes,
+        };
         const characterReferenceImages = activeCharacterLock
             ? [{ href: activeCharacterLock.referenceImage, mimeType: getMimeFromDataUrl(activeCharacterLock.referenceImage) }]
             : [];
@@ -2605,6 +2730,7 @@ const App: React.FC = () => {
                                 height: video.videoHeight,
                                 prompt: effectivePrompt,
                                 mediaType: 'video',
+                                ...promptHistoryMeta,
                             });
                         }
                     } catch { /* 缂╃暐鍥惧け璐ヤ笉褰卞搷涓绘祦绋?*/ }
@@ -2715,6 +2841,7 @@ const App: React.FC = () => {
                                 height: video.videoHeight,
                                 prompt: effectivePrompt,
                                 mediaType: 'video',
+                                ...promptHistoryMeta,
                             });
                         }
                     } catch { /* 缂╃暐鍥惧け璐ヤ笉褰卞搷涓绘祦绋?*/ }
@@ -2796,13 +2923,16 @@ const App: React.FC = () => {
                                 }).filter(el => !maskPathIds.has(el.id))
                             );
                             setSelectedElementIds([baseImage.id]);
+                            const historyPreview = buildHistoryThumbnailFromImage(img, newImageMimeType, nextDataUrl);
                             saveGenerationToHistory({
                                 name: baseImage.name || 'Edited image',
-                                dataUrl: nextDataUrl,
-                                mimeType: newImageMimeType,
+                                dataUrl: historyPreview.dataUrl,
+                                originalDataUrl: nextDataUrl,
+                                mimeType: historyPreview.mimeType,
                                 width: img.width,
                                 height: img.height,
                                 prompt: effectivePrompt,
+                                ...promptHistoryMeta,
                             });
                         };
                         img.onerror = () => setError('Failed to load the generated image.');
@@ -2853,13 +2983,16 @@ const App: React.FC = () => {
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
+                        const historyPreview = buildHistoryThumbnailFromImage(img, imageMimeType, imageSrc);
                         saveGenerationToHistory({
                             name: newImage.name,
-                            dataUrl: newImage.href,
-                            mimeType: newImage.mimeType,
+                            dataUrl: historyPreview.dataUrl,
+                            originalDataUrl: imageSrc,
+                            mimeType: historyPreview.mimeType,
                             width: newImage.width,
                             height: newImage.height,
                             prompt: effectivePrompt,
+                            ...promptHistoryMeta,
                         });
                     };
                     img.onerror = () => setError('Failed to load the generated image.');
@@ -2892,13 +3025,20 @@ const App: React.FC = () => {
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
+                        const historyPreview = buildHistoryThumbnailFromImage(
+                            img,
+                            newImageMimeType,
+                            `data:${newImageMimeType};base64,${newImageBase64}`
+                        );
                         saveGenerationToHistory({
                             name: newImage.name,
-                            dataUrl: newImage.href,
-                            mimeType: newImage.mimeType,
+                            dataUrl: historyPreview.dataUrl,
+                            originalDataUrl: `data:${newImageMimeType};base64,${newImageBase64}`,
+                            mimeType: historyPreview.mimeType,
                             width: newImage.width,
                             height: newImage.height,
                             prompt: effectivePrompt,
+                            ...promptHistoryMeta,
                         });
                     };
                     img.onerror = () => setError('Failed to load the generated image.');
@@ -2945,13 +3085,16 @@ const App: React.FC = () => {
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
+                        const historyPreview = buildHistoryThumbnailFromImage(img, imageMimeType, imageSrc);
                         saveGenerationToHistory({
                             name: newImage.name,
-                            dataUrl: newImage.href,
-                            mimeType: newImage.mimeType,
+                            dataUrl: historyPreview.dataUrl,
+                            originalDataUrl: imageSrc,
+                            mimeType: historyPreview.mimeType,
                             width: newImage.width,
                             height: newImage.height,
                             prompt: effectivePrompt,
+                            ...promptHistoryMeta,
                         });
                     };
                     img.onerror = () => setError('Failed to load the generated image.');

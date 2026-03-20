@@ -1,7 +1,7 @@
 import type { GenerationHistoryItem } from '../types';
 
 const STORAGE_KEY = 'making.generationHistory.v1';
-const MAX_HISTORY_ITEMS = 18;
+const MAX_HISTORY_ITEMS = 36;
 
 export const loadGenerationHistory = (): GenerationHistoryItem[] => {
     try {
@@ -45,7 +45,11 @@ export const addGenerationHistoryItem = (
     items: GenerationHistoryItem[],
     item: GenerationHistoryItem
 ): GenerationHistoryItem[] => {
-    const next = [item, ...items.filter(existing => existing.dataUrl !== item.dataUrl)].slice(0, MAX_HISTORY_ITEMS);
+    const itemKey = item.originalDataUrl || item.dataUrl;
+    const next = [
+        item,
+        ...items.filter(existing => (existing.originalDataUrl || existing.dataUrl) !== itemKey),
+    ].slice(0, MAX_HISTORY_ITEMS);
     saveGenerationHistory(next);
     return next;
 };

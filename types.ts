@@ -114,7 +114,8 @@ export interface AssetItem {
   id: string;
   name?: string;
   category: AssetCategory;
-  dataUrl: string; // base64 image
+  dataUrl: string;
+  originalDataUrl?: string;
   mimeType: string; // image/png, image/jpeg
   width: number;
   height: number;
@@ -130,14 +131,18 @@ export interface AssetLibrary {
 export interface GenerationHistoryItem {
   id: string;
   name?: string;
-  dataUrl: string;        // 图片 base64 或视频缩略图 base64
+  dataUrl: string;
+  originalDataUrl?: string;
   mimeType: string;
   width: number;
   height: number;
   prompt: string;
   createdAt: number;
-  /** 生成类型：image | video，默认 image */
+  /** 閻㈢喐鍨氱猾璇茬€烽敍姝﹎age | video閿涘矂绮拋?image */
   mediaType?: 'image' | 'video';
+  promptScore?: number;
+  promptModel?: string;
+  promptNotes?: string;
 }
 
 // API Key & Model Preferences
@@ -154,9 +159,9 @@ export interface UserApiKey {
   name?: string;
   isDefault?: boolean;
   status?: 'unknown' | 'ok' | 'error';
-  /** 用户为这个 Key 自定义的可调用模型列表 */
+  /** 閻劍鍩涙稉楦跨箹娑?Key 閼奉亜鐣炬稊澶屾畱閸欘垵鐨熼悽銊δ侀崹瀣灙鐞?*/
   customModels?: string[];
-  /** 这些自定义模型中用户设定的默认模型 */
+  /** 鏉╂瑤绨洪懛顏勭暰娑斿膩閸ㄥ鑵戦悽銊﹀煕鐠佹儳鐣鹃惃鍕帛鐠併倖膩閸?*/
   defaultModel?: string;
   createdAt: number;
   updatedAt: number;
@@ -177,6 +182,8 @@ export interface PromptEnhanceRequest {
   prompt: string;
   mode: PromptEnhanceMode;
   stylePreset?: string;
+  /** few-shot memory prompts retrieved from successful generation history */
+  memoryExamples?: string[];
 }
 
 export interface PromptEnhanceResult {

@@ -1,3 +1,5 @@
+import type { Config as ImglyBackgroundRemovalConfig } from "@imgly/background-removal";
+
 /**
  * BANANA 图像识别拆层服务
  *
@@ -44,6 +46,16 @@ let runtimeBananaConfig: {
   agentUrl?: string;
 } = {};
 
+const IMGLY_BG_REMOVAL_CONFIG: ImglyBackgroundRemovalConfig = {
+  debug: false,
+  model: "isnet_fp16",
+  output: {
+    format: "image/png",
+    quality: 1,
+    type: "foreground",
+  },
+};
+
 export function setBananaRuntimeConfig(config: {
   apiKey?: string;
   splitUrl?: string;
@@ -59,6 +71,37 @@ function toDataUrl(base64: string, mimeType: string): string {
 
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read processed image blob."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function getImageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+    img.onerror = () => reject(new Error("Failed to load processed image for size measurement."));
+    img.src = src;
+  });
+}
+
+async function removeBackgroundLocally(image: BananaImageInput): Promise<BananaAgentResult> {
+  const { default: imglyRemoveBackground } = await import("@imgly/background-removal");
+  const resultBlob = await imglyRemoveBackground(image.href, IMGLY_BG_REMOVAL_CONFIG);
+  const dataUrl = await blobToDataUrl(resultBlob);
+  const size = await getImageDimensions(dataUrl);
+  return {
+    dataUrl,
+    mimeType: resultBlob.type || "image/png",
+    width: size.width,
+    height: size.height,
+  };
 }
 
 function normalizeLayer(layer: RawLayer, idx: number): BananaSplitLayer | null {
@@ -178,6 +221,16 @@ export async function runBananaImageAgent(
   task: BananaAgentTask,
   options?: Record<string, unknown>
 ): Promise<BananaAgentResult> {
+  // One-click background removal behavior: local-first for stability.
+  // If local processing fails, automatically fallback to remote service.
+  if (task === "remove-background") {
+    try {
+      return await removeBackgroundLocally(image);
+    } catch {
+      // fallback to remote path below
+    }
+  }
+
   const base64Payload = image.href.includes(",")
     ? image.href.split(",")[1]
     : image.href;
@@ -190,22 +243,27 @@ export async function runBananaImageAgent(
     headers.Authorization = `Bearer ${key}`;
   }
 
-  const response = await fetch(runtimeBananaConfig.agentUrl || BANANA_AGENT_API_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      task,
-      image: {
-        data: base64Payload,
-        mimeType: image.mimeType,
-      },
-      options: options || {},
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(runtimeBananaConfig.agentUrl || BANANA_AGENT_API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        task,
+        image: {
+          data: base64Payload,
+          mimeType: image.mimeType,
+        },
+        options: options || {},
+      }),
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "Network request failed.");
+  }
 
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`BANANA Agent 请求失败 (${response.status}): ${text || response.statusText}`);
+    const textBody = await response.text().catch(() => "");
+    throw new Error(`Background removal request failed (${response.status}): ${textBody || response.statusText}`);
   }
 
   const json = (await response.json()) as Record<string, unknown>;
@@ -217,7 +275,7 @@ export async function runBananaImageAgent(
 
   const normalized = normalizeAgentImage(candidate, image.mimeType);
   if (!normalized) {
-    throw new Error("BANANA Agent 未返回可用图片数据。");
+    throw new Error("Background removal response did not contain usable image data.");
   }
 
   return normalized;

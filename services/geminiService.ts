@@ -149,19 +149,27 @@ function safeParseEnhanceJson(raw: string, fallbackPrompt: string): PromptEnhanc
 
 export async function enhancePromptWithGemini(request: PromptEnhanceRequest, apiKey?: string): Promise<PromptEnhanceResult> {
   const modeHintMap: Record<PromptEnhanceRequest["mode"], string> = {
-    smart: "Do intelligent enhancement with richer cinematic details, composition, and lighting.",
-    style: `Rewrite with strong style intent. Preferred style preset: ${request.stylePreset || "cinematic"}.`,
-    precise: "Preserve user intent strictly; only optimize clarity and structure.",
-    translate: "Translate and optimize prompt for model friendliness while preserving semantics.",
+    smart: "Maximize image quality: enrich subject details, composition, camera language, lighting, texture/material, color script, atmosphere, and render fidelity.",
+    style: `Apply strong style direction with high consistency. Preferred style preset: ${request.stylePreset || "cinematic"}.`,
+    precise: "Keep user intent strict, but still raise visual quality with concrete nouns, camera/lens details, and physically plausible lighting.",
+    translate: "Translate and optimize for image model readability while preserving semantics and quality constraints.",
   };
 
+  const memoryHint = (request.memoryExamples || [])
+    .slice(0, 3)
+    .map((item, index) => `MemoryExample${index + 1}: ${item}`)
+    .join("\n");
+
   const instruction = [
-    "You are a professional prompt engineer for image/video generation.",
+    "You are a senior prompt engineer focused on premium image generation quality.",
     "Return ONLY valid JSON with keys: enhancedPrompt, negativePrompt, suggestions, notes.",
-    "Keep enhancedPrompt concise but vivid, no markdown.",
-    "negativePrompt should be a comma-separated phrase list.",
-    "suggestions should be short keyword phrases.",
+    "Do not use markdown. Do not add extra keys.",
+    "enhancedPrompt: one high-density paragraph with clear subject, scene, composition, lens/camera, lighting, material texture, color palette, mood, and quality tags.",
+    "negativePrompt: a comma-separated list of 12-24 constraints to suppress artifacts and low quality outcomes.",
+    "suggestions: 4-8 short style/control keywords.",
+    "Prefer concrete visual language over vague adjectives.",
     modeHintMap[request.mode],
+    memoryHint ? `Use these as quality references, not hard constraints:\n${memoryHint}` : "",
   ].join("\n");
 
   try {

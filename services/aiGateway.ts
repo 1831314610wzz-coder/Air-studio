@@ -95,7 +95,7 @@ function getApiyiOrigin(baseUrl: string): string {
 function mapToApiyiNativeModel(model: string): string {
     const lower = model.trim().toLowerCase();
     if (lower === 'nano-banana') return 'gemini-2.5-flash-image';
-    if (lower === 'nano-banana-2') return 'gemini-2.5-flash-image';
+    if (lower === 'nano-banana-2') return 'gemini-3.1-flash-image-preview';
     if (lower === 'nano-banana-pro') return 'gemini-3-pro-image-preview';
     return model;
 }
@@ -212,19 +212,27 @@ async function imageUrlToBase64(url: string): Promise<{ base64: string; mimeType
 
 function inferPromptModeHint(request: PromptEnhanceRequest) {
     const modeHintMap: Record<PromptEnhanceRequest['mode'], string> = {
-        smart: 'Do intelligent enhancement with richer cinematic details, composition, and lighting.',
-        style: `Rewrite with strong style intent. Preferred style preset: ${request.stylePreset || 'cinematic'}.`,
-        precise: 'Preserve user intent strictly; only optimize clarity and structure.',
-        translate: 'Translate and optimize prompt for model friendliness while preserving semantics.',
+        smart: 'Maximize image quality: enrich subject details, composition, camera language, lighting, texture/material, color script, atmosphere, and render fidelity.',
+        style: `Apply strong style direction with high consistency. Preferred style preset: ${request.stylePreset || 'cinematic'}.`,
+        precise: 'Keep user intent strict, but still raise visual quality with concrete nouns, camera/lens details, and physically plausible lighting.',
+        translate: 'Translate and optimize for image model readability while preserving semantics and quality constraints.',
     };
 
+    const memoryHint = (request.memoryExamples || [])
+        .slice(0, 3)
+        .map((item, index) => `MemoryExample${index + 1}: ${item}`)
+        .join('\n');
+
     return [
-        'You are a professional prompt engineer for image and video generation.',
+        'You are a senior prompt engineer focused on premium image generation quality.',
         'Return ONLY valid JSON with keys: enhancedPrompt, negativePrompt, suggestions, notes.',
-        'Keep enhancedPrompt concise but vivid. Do not use markdown.',
-        'negativePrompt should be a comma-separated phrase list.',
-        'suggestions should be short keyword phrases.',
+        'Do not use markdown. Do not add extra keys.',
+        'enhancedPrompt: one high-density paragraph with clear subject, scene, composition, lens/camera, lighting, material texture, color palette, mood, and quality tags.',
+        'negativePrompt: a comma-separated list of 12-24 constraints to suppress artifacts and low quality outcomes.',
+        'suggestions: 4-8 short style/control keywords.',
+        'Prefer concrete visual language over vague adjectives.',
         modeHintMap[request.mode],
+        memoryHint ? `Use these as quality references, not hard constraints:\n${memoryHint}` : '',
     ].join('\n');
 }
 
@@ -251,6 +259,207 @@ function safeParsePromptResult(raw: string, fallbackPrompt: string): PromptEnhan
             notes: raw || 'No response content returned by model.',
         };
     }
+}
+
+function stripJsonFence(raw: string): string {
+    return raw
+        .replace(/^```json\s*/i, '')
+        .replace(/^```/i, '')
+        .replace(/```$/i, '')
+        .trim();
+}
+
+function safeJsonParse<T>(raw: string): T | null {
+    try {
+        return JSON.parse(stripJsonFence(raw)) as T;
+    } catch {
+        return null;
+    }
+}
+
+function normalizePromptEnhanceResult(candidate: Partial<PromptEnhanceResult> | null, fallbackPrompt: string): PromptEnhanceResult {
+    return {
+        enhancedPrompt: candidate?.enhancedPrompt?.trim() || fallbackPrompt,
+        negativePrompt: candidate?.negativePrompt?.trim() || '',
+        suggestions: Array.isArray(candidate?.suggestions) ? candidate!.suggestions.filter(Boolean).slice(0, 8) : [],
+        notes: candidate?.notes?.trim() || '',
+    };
+}
+
+type PromptPlan = {
+    subject: string;
+    scene: string;
+    composition: string;
+    camera: string;
+    lighting: string;
+    style: string;
+    negativeHints: string[];
+};
+
+function planPromptIntent(prompt: string): PromptPlan {
+    const normalized = prompt.trim();
+    const lower = normalized.toLowerCase();
+    const byKeywords = (pairs: Array<[RegExp, string]>, fallback: string) =>
+        pairs.find(([pattern]) => pattern.test(lower))?.[1] || fallback;
+
+    return {
+        subject: normalized.split(/[,.!?\n]/)[0]?.trim() || normalized,
+        scene: byKeywords([
+            [/\bstage|theater|opera|performance\b/, 'ornate performance venue with layered environmental storytelling'],
+            [/\bcity|street|market\b/, 'immersive environment with readable spatial depth'],
+            [/\bportrait|character|person\b/, 'subject-focused portrait setup'],
+        ], 'cohesive scene with readable foreground, midground, and background'),
+        composition: byKeywords([
+            [/\bwide\b|\bestablishing\b/, 'wide establishing composition with clear depth separation'],
+            [/\bclose[- ]?up\b/, 'close-up framing with strong focal emphasis'],
+            [/\b16:9\b/, 'cinematic horizontal composition with balanced negative space'],
+        ], 'balanced composition with strong focal hierarchy and clean silhouettes'),
+        camera: byKeywords([
+            [/\bwide angle\b|\b24mm\b/, 'wide-angle lens feeling, cinematic perspective'],
+            [/\b50mm\b|\bportrait\b/, '50mm lens feeling, natural perspective'],
+            [/\bmacro\b/, 'macro-detail emphasis with shallow depth of field'],
+        ], 'cinematic lens language, controlled perspective'),
+        lighting: byKeywords([
+            [/\bnight\b|\bdark\b/, 'dramatic motivated lighting, soft volumetric glow, controlled contrast'],
+            [/\bsoft\b/, 'soft diffused lighting with gentle shadow transitions'],
+            [/\bbright\b|\bsunny\b/, 'bright polished lighting with crisp key/fill separation'],
+        ], 'polished cinematic lighting with depth, contrast, and controlled highlights'),
+        style: byKeywords([
+            [/\b2d\b|\bcartoon\b|\billustration\b/, 'clean stylized illustration, appealing shapes, polished line and color control'],
+            [/\brealistic\b|\bphoto\b/, 'high-end realistic rendering, rich material definition'],
+            [/\bstorybook\b/, 'storybook illustration with charming visual narrative'],
+        ], 'high-quality visual storytelling with strong stylistic consistency'),
+        negativeHints: [
+            'low quality', 'blurry', 'deformed anatomy', 'cropped subject', 'flat lighting', 'muddy colors', 'text artifacts', 'watermark',
+        ],
+    };
+}
+
+function applyModelPromptTemplate(model: string, plan: PromptPlan, basePrompt: string): string {
+    const lower = model.toLowerCase();
+    const qualityTail =
+        lower.includes('pro')
+            ? 'premium detail, nuanced materials, advanced lighting, strong atmosphere, polished finish'
+            : lower.includes('banana-2')
+                ? 'clean composition, stronger focal hierarchy, richer lighting contrast, more refined detail'
+                : 'clear subject readability, appealing composition, vibrant lighting, clean details';
+
+    return [
+        basePrompt,
+        `Scene intent: ${plan.scene}.`,
+        `Composition: ${plan.composition}.`,
+        `Camera: ${plan.camera}.`,
+        `Lighting: ${plan.lighting}.`,
+        `Style: ${plan.style}.`,
+        `Quality targets: ${qualityTail}.`,
+    ].join(' ');
+}
+
+function scorePromptCandidate(candidate: PromptEnhanceResult): number {
+    const text = `${candidate.enhancedPrompt} ${candidate.negativePrompt}`.toLowerCase();
+    let score = 0;
+
+    score += Math.min(32, Math.floor(candidate.enhancedPrompt.length / 18));
+
+    const controlTerms = ['composition', 'lighting', 'camera', 'lens', 'color', 'texture', 'atmosphere', 'depth', 'cinematic', 'materials'];
+    score += controlTerms.reduce((acc, term) => acc + (text.includes(term) ? 4 : 0), 0);
+
+    const negatives = candidate.negativePrompt.split(',').map(s => s.trim()).filter(Boolean);
+    score += Math.min(24, negatives.length * 2);
+
+    if (candidate.enhancedPrompt.length < 140) score -= 12;
+    if (!text.includes('lighting')) score -= 8;
+    if (!text.includes('composition')) score -= 8;
+    if (!text.includes('camera') && !text.includes('lens')) score -= 6;
+
+    return Math.max(0, score);
+}
+
+async function runOpenAICompatiblePromptStep(
+    model: string,
+    provider: AIProvider,
+    key: UserApiKey | undefined,
+    systemPrompt: string,
+    userPrompt: string,
+    temperature = 0.4
+): Promise<string> {
+    const apiKey = requireApiKey(provider, key);
+    const baseUrl = getBaseUrl(provider, key);
+    const supportsJsonObjectResponseFormat = provider === 'openai';
+    const requestBody: any = {
+        model,
+        temperature,
+        messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+        ],
+    };
+    if (supportsJsonObjectResponseFormat) {
+        requestBody.response_format = { type: 'json_object' };
+    }
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+    });
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`${provider} LLM step failed (${response.status}): ${text || response.statusText}`);
+    }
+    const json = await response.json();
+    return json?.choices?.[0]?.message?.content || '';
+}
+
+async function runAnthropicPromptStep(
+    model: string,
+    key: UserApiKey | undefined,
+    systemPrompt: string,
+    userPrompt: string
+): Promise<string> {
+    const apiKey = requireApiKey('anthropic', key);
+    const baseUrl = getBaseUrl('anthropic', key);
+    const response = await fetch(`${baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+            model,
+            max_tokens: 1200,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userPrompt }],
+        }),
+    });
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Anthropic LLM step failed (${response.status}): ${text || response.statusText}`);
+    }
+    const json = await response.json();
+    return Array.isArray(json?.content)
+        ? json.content.map((item: { text?: string }) => item.text || '').join('\n')
+        : '';
+}
+
+async function runPromptAgentStep(
+    provider: AIProvider,
+    model: string,
+    key: UserApiKey | undefined,
+    systemPrompt: string,
+    userPrompt: string,
+    temperature = 0.4
+): Promise<string> {
+    if (provider === 'anthropic') {
+        return runAnthropicPromptStep(model, key, systemPrompt, userPrompt);
+    }
+    if (provider === 'openai' || provider === 'qwen' || provider === 'custom') {
+        return runOpenAICompatiblePromptStep(model, provider, key, systemPrompt, userPrompt, temperature);
+    }
+    throw new Error(`Prompt agent pipeline is not supported for provider: ${provider}`);
 }
 
 export function inferProviderFromModel(model: string): AIProvider {
@@ -358,6 +567,126 @@ export async function enhancePromptWithProvider(
     }
 
     return enhancePromptWithOpenAICompatible(request, model, provider, key);
+}
+
+export async function enhancePromptWithAgentPipeline(
+    request: PromptEnhanceRequest,
+    model: string,
+    key?: UserApiKey
+): Promise<PromptEnhanceResult> {
+    const provider = inferProviderFromModel(model);
+
+    // For Google, keep current single-step flow to avoid SDK dual-path complexity.
+    if (provider === 'google') {
+        const base = await enhancePromptWithProvider(request, model, key);
+        return {
+            ...base,
+            notes: [base.notes, 'pipeline: fallback(single-step-google)'].filter(Boolean).join(' | '),
+        };
+    }
+
+    const isSupported = provider === 'openai' || provider === 'qwen' || provider === 'custom' || provider === 'anthropic';
+    if (!isSupported) {
+        return enhancePromptWithProvider(request, model, key);
+    }
+
+    const plan = planPromptIntent(request.prompt);
+
+    const buildSystem = [
+        'You are a Prompt Composer for premium image generation.',
+        'Return JSON only with keys: enhancedPrompt, negativePrompt, suggestions, notes.',
+        'enhancedPrompt must be one dense paragraph covering subject, scene, composition, camera/lens, lighting, material texture, color palette, mood, and quality descriptors.',
+        'negativePrompt must be a comma-separated list with at least 12 concrete artifact suppressions.',
+        'suggestions must contain 4-8 short control keywords.',
+        `mode=${request.mode}; stylePreset=${request.stylePreset || 'none'}`,
+    ].join('\n');
+
+    const memorySection = (request.memoryExamples || [])
+        .slice(0, 3)
+        .map((item, index) => `- Example ${index + 1}: ${item}`)
+        .join('\n');
+
+    const primaryUser = [
+        'Optimize this image prompt for high quality while preserving intent.',
+        `Planned subject: ${plan.subject}`,
+        `Planned scene: ${plan.scene}`,
+        `Planned composition: ${plan.composition}`,
+        `Planned camera: ${plan.camera}`,
+        `Planned lighting: ${plan.lighting}`,
+        `Planned style: ${plan.style}`,
+        `Base prompt: ${applyModelPromptTemplate(model, plan, request.prompt)}`,
+        memorySection ? `Reference memory prompts:\n${memorySection}` : '',
+    ].join('\n\n');
+
+    const variantSystem = [
+        'You are a fast alternate prompt optimizer.',
+        'Return JSON only with keys: enhancedPrompt, negativePrompt, suggestions, notes.',
+        'Bias toward stronger composition and lighting control while preserving intent.',
+        'Keep wording compact and model-friendly.',
+    ].join('\n');
+
+    const variantUser = [
+        'Generate an alternative high-quality version for the same prompt.',
+        'Prefer explicit shot framing, focal length feel, and lighting hierarchy.',
+        `Base prompt: ${applyModelPromptTemplate(model, plan, request.prompt)}`,
+        memorySection ? `Reference memory prompts:\n${memorySection}` : '',
+    ].join('\n\n');
+
+    const primaryPromise = runPromptAgentStep(
+        provider,
+        model,
+        key,
+        buildSystem,
+        primaryUser,
+        0.35
+    );
+
+    const variantPromise = runPromptAgentStep(
+        provider,
+        model,
+        key,
+        variantSystem,
+        variantUser,
+        0.45
+    );
+
+    const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
+        return await new Promise<T | null>((resolve) => {
+            const timer = setTimeout(() => resolve(null), timeoutMs);
+            promise
+                .then(value => resolve(value))
+                .catch(() => resolve(null))
+                .finally(() => clearTimeout(timer));
+        });
+    };
+
+    const primaryRaw = await primaryPromise;
+    const primary = normalizePromptEnhanceResult(
+        safeJsonParse<Partial<PromptEnhanceResult>>(primaryRaw),
+        request.prompt
+    );
+
+    const primaryScore = scorePromptCandidate(primary);
+    const needsRefiner = primaryScore < 58;
+    const variantRaw = needsRefiner ? await withTimeout(variantPromise, 900) : null;
+    const variant = variantRaw
+        ? normalizePromptEnhanceResult(safeJsonParse<Partial<PromptEnhanceResult>>(variantRaw), request.prompt)
+        : null;
+    const variantScore = variant ? scorePromptCandidate(variant) : -1;
+    const best = variant && variantScore > primaryScore ? variant : primary;
+    const finalScore = variant && variantScore > primaryScore ? variantScore : primaryScore;
+
+    return {
+        enhancedPrompt: best.enhancedPrompt,
+        negativePrompt: best.negativePrompt,
+        suggestions: best.suggestions,
+        notes: [
+            best.notes,
+            `pipeline: planner->composer->critic${needsRefiner ? '->refiner' : ''}->memory`,
+            `modelAdapter=${model}`,
+            `scores(primary=${primaryScore}${needsRefiner ? (variant ? `, refiner=${variantScore}` : ', refiner=timeout') : ', refiner=skipped'}, final=${finalScore})`,
+        ].filter(Boolean).join(' | '),
+    };
 }
 
 /**
