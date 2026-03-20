@@ -252,3 +252,13 @@ VITE_GEMINI_API_KEY=your_gemini_api_key_here
 ## �📄 License
 
 本项目基于 [Apache License 2.0](./LICENSE) 开源。
+
+---
+
+## Recent Changes (2026-03-20)
+
+- Background removal is now a one-click flow with local-first processing and automatic remote fallback.
+- Generation history now stores compressed thumbnails for panel display to improve retention count.
+- Dragging an item from generation history back to canvas now prefers the original image source (not thumbnail).
+- Right-side Generate panel no longer supports reference image import; references are added only from the bottom prompt bar.
+- Development server default port is set to `3001` for consistent local access.
