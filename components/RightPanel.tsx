@@ -87,7 +87,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     const [category, setCategory] = useState<AssetCategory>('character');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
-    const [prompt, setPrompt] = useState('');
     const [panelWidth, setPanelWidth] = useState(() => {
         const saved = localStorage.getItem('rightPanelWidth');
         return saved ? parseInt(saved, 10) : defaultWidth;
@@ -97,7 +96,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     const [resizeStartWidth, setResizeStartWidth] = useState(380);
 
     const editInputRef = useRef<HTMLInputElement>(null);
-    const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
     const items = useMemo(() => library[category], [category, library]);
 
@@ -151,13 +149,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         }
     }, [editingId]);
 
-    useEffect(() => {
-        const textarea = promptInputRef.current;
-        if (!textarea) return;
-        textarea.style.height = '0px';
-        textarea.style.height = `${Math.min(168, Math.max(88, textarea.scrollHeight))}px`;
-    }, [prompt]);
-
     const handleResizePointerDown = (event: React.PointerEvent) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         setIsResizing(true);
@@ -165,20 +156,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         setResizeStartWidth(panelWidth);
         event.stopPropagation();
         event.preventDefault();
-    };
-
-    const handleGenerate = () => {
-        const nextPrompt = prompt.trim();
-        if (!nextPrompt) return;
-        onGenerate(nextPrompt);
-        setPrompt('');
-    };
-
-    const handleLibraryDragStart = (event: React.DragEvent, item: AssetItem) => {
-        const payload = JSON.stringify({ __makingAsset: true, item });
-        event.dataTransfer.setData('application/x-making-asset', payload);
-        event.dataTransfer.setData('text/plain', payload);
-        event.dataTransfer.effectAllowed = 'copy';
     };
 
     const handleHistoryDragStart = (event: React.DragEvent, item: GenerationHistoryItem) => {
@@ -302,32 +279,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
                 <div className="min-h-0 flex-1 overflow-hidden">
                     {activeTab === 'generate' && (
-                        <div className={`flex h-full min-h-0 flex-col ${compactMode ? 'gap-3 p-3' : 'gap-4 p-4'}`}>
-                            <div className={`relative rounded-[26px] border border-neutral-200 bg-neutral-50 ${compactMode ? 'p-3.5' : 'p-4'} shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]`}>
-                                <textarea
-                                    ref={promptInputRef}
-                                    value={prompt}
-                                    onChange={event => setPrompt(event.target.value)}
-                                    placeholder="Type prompt here. Add reference images from the bottom prompt bar."
-                                    className={`w-full resize-none border-none bg-transparent px-1 py-1 text-neutral-800 outline-none placeholder:text-neutral-400 ${compactMode ? 'min-h-[88px] text-[14px] leading-6' : 'min-h-[96px] text-[15px] leading-7'}`}
-                                />
-
-                                <div className={`mt-4 flex items-center justify-between gap-3 ${compactMode ? 'flex-col items-stretch' : ''}`}>
-                                    <div className="text-xs text-neutral-500">
-                                        Right panel is text-only. Add references in the bottom prompt bar.
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={handleGenerate}
-                                        disabled={!prompt.trim()}
-                                        className={`flex items-center justify-center rounded-full bg-neutral-900 text-white transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-300 ${compactMode ? 'w-full px-4 py-2.5 text-sm' : 'px-4 py-2 text-sm'}`}
-                                    >
-                                        Generate
-                                    </button>
-                                </div>
-                            </div>
-
+                        <div className={`flex h-full min-h-0 flex-col ${compactMode ? 'p-3' : 'p-4'}`}>
                             <div className="flex min-h-0 flex-1 flex-col">
                                 <div className="mb-3 flex items-center justify-between">
                                     <div>
@@ -343,28 +295,28 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                     {generationHistory.length === 0 ? (
                                         <EmptyHistory />
                                     ) : (
-                                        <div className={`grid ${compactMode ? 'grid-cols-1 gap-2.5' : 'grid-cols-2 gap-3'}`}>
+                                        <div className={`grid ${compactMode ? 'grid-cols-2 gap-2' : 'grid-cols-4 gap-2'}`}>
                                             {generationHistory.map(item => (
                                                 <div
                                                     key={item.id}
-                                                    className="group cursor-grab rounded-[22px] border border-neutral-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing"
+                                                    className="group cursor-grab rounded-[14px] border border-neutral-200 bg-white p-1.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing"
                                                     draggable
                                                     onDragStart={event => handleHistoryDragStart(event, item)}
                                                 >
-                                                    <div className="overflow-hidden rounded-[16px] bg-neutral-100">
+                                                    <div className="overflow-hidden rounded-[10px] bg-neutral-100">
                                                         <img
                                                             src={item.dataUrl}
                                                             alt={item.name || item.prompt}
-                                                            className={`w-full object-cover ${compactMode ? 'aspect-[4/3]' : 'aspect-square'}`}
+                                                            className="aspect-square w-full object-cover"
                                                         />
                                                     </div>
-                                                    <div className="px-1 pb-1 pt-2">
-                                                        <p className="line-clamp-2 text-xs font-medium leading-5 text-neutral-800">
+                                                    <div className="px-0.5 pb-0.5 pt-1">
+                                                        <p className="line-clamp-1 text-[11px] font-medium leading-4 text-neutral-800">
                                                             {item.name || item.prompt}
                                                         </p>
-                                                        <div className="mt-2 flex items-center justify-between text-[11px] text-neutral-400">
-                                                            <span>{item.width}×{item.height}</span>
-                                                            <span>{formatTime(item.createdAt)}</span>
+                                                        <div className="mt-1 text-[10px] leading-4 text-neutral-400">
+                                                            <p className="truncate">{item.width}x{item.height}</p>
+                                                            <p className="truncate">{formatTime(item.createdAt)}</p>
                                                         </div>
                                                     </div>
                                                 </div>

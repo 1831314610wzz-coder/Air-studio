@@ -1,264 +1,110 @@
-<p align="center">
-  <img src="displayphoto1.png" alt="MakingLovart" width="100%" />
-</p>
+﻿# Air Studio
 
-<h1 align="center">🎨 MakingLovart</h1>
+鍩轰簬 [MakingLovart](https://github.com/Paker-kk/MakingLovart) 浜屾淇敼涓庢寔缁紭鍖栫殑鐗堟湰锛岄潰鍚戜腑鏂囧垱浣滃伐浣滄祦鍋氫簡鏇磋创杩戝疄闄呬娇鐢ㄧ殑鏃犻檺鐢诲竷 + AI 鐢熷浘浣撻獙鏁村悎銆?
+## 椤圭洰鍑哄
 
-<p align="center">
-  <strong>AI-Native Infinite Canvas for Creative Minds</strong>
-</p>
+- 鍘熷椤圭洰锛歔`Paker-kk/MakingLovart`](https://github.com/Paker-kk/MakingLovart)
+- 鏈」鐩€ц川锛氬熀浜庡師椤圭洰缁х画寮€鍙戠殑浼樺寲鐗堟湰锛屽苟闈炰粠闆剁嫭绔嬪疄鐜?- 淇濈暀璇存槑锛氳灏婇噸鍘熼」鐩綔鑰呬笌涓婃父浠撳簱鐨勫紑婧愬崗璁€佺讲鍚嶄笌璐＄尞鍘嗗彶
 
-<p align="center">
-  <em>用一句话描述你的想象，AI 帮你画出来</em>
-</p>
+## 褰撳墠鐗堟湰閲嶇偣浼樺寲
 
-<p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-deployment">Deployment</a> •
-  <a href="#-contributing">Contributing</a>
-</p>
+鏈増鏈湪 `makinglovart` 鍩虹涓婏紝鍥寸粫銆屾洿绋冲畾鐨勭敓鍥炬祦绋嬨€佹洿椤烘墜鐨勭櫧鏉夸綋楠屻€佹洿璐村悎涓枃鐢ㄦ埛銆嶅仛浜嗘寔缁皟鏁达紝涓昏鍖呮嫭锛?
+### 1. 澶氭ā鍨嬩笌鑷畾涔?API 鎺ュ叆浼樺寲
 
-<p align="center">
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white" alt="Vite 6" />
-  <img src="https://img.shields.io/badge/Gemini-2.5-4285F4?logo=google&logoColor=white" alt="Gemini" />
-  <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache 2.0 License" />
-  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white" alt="Docker" />
-</p>
+- 鎺ュ叆骞舵暣鐞嗕簡鑷畾涔?LLM / 鐢熷浘 API 閰嶇疆娴佺▼
+- 榛樿淇濈暀 `ARK` 浣滀负 LLM 閫氶亾
+- 鏀寔鎺ュ叆 `APIYI` 鍥惧儚鐢熸垚鑳藉姏
+- 瀵逛笉鍚屽浘鍍忔湇鍔＄殑鍒嗚鲸鐜囧弬鏁板仛浜嗛€傞厤涓庢牎楠岋紝閬垮厤鍥犲昂瀵镐笉鍚堟硶瀵艰嚧璇锋眰澶辫触
 
----
+### 2. 鐢诲竷涓庡伐浣滄祦浣撻獙浼樺寲
 
-## ✨ What is MakingLovart?
+- 榛樿鎵撳紑鍓嶇鍗宠繘鍏ユ洿鎺ヨ繎 Lovart 鐨勫伐浣滃尯甯冨眬
+- 绮剧畝搴曢儴杈撳叆鏍忎笌鍙充晶闈㈡澘锛屽噺灏戦噸澶嶅叆鍙?- 鏀寔閫氳繃鍥炶溅鐩存帴鍙戦€?prompt
+- 鍘嗗彶鐢熸垚鍥剧墖鍙洿鎺ユ嫋鍏ョ敾甯?- 淇鍘嗗彶鍥剧墖鎷栨嫿銆佸垵濮嬭惤鐢诲竷灏哄杩囧ぇ銆佺缉鐣ュ浘缂哄け绛夐棶棰?- 鍘婚櫎骞叉壈鎬х殑鐢诲竷鑳屾櫙鐐归樀锛屼娇鐢诲竷鏇村共鍑€
 
-MakingLovart 是一个 **AI 驱动的无限画布创作工具**，灵感来源于 Miro + Lovart。你可以在白板上自由绘制、拖放素材，然后用自然语言提示词让 AI 生成图片、编辑图片、甚至生成视频——一切都在一个流畅的画布体验中完成。
+### 3. 鍘嗗彶璁板綍涓庢寔涔呭寲浼樺寲
 
-> **Think of it as**: Figma's infinite canvas + ChatGPT's intelligence + Stable Diffusion's creativity — all in your browser.
+- 鍘嗗彶鐢熸垚榛樿淇濆瓨鍒版湰鍦?- 鍘嗗彶鍒楄〃鏀逛负鏇磋交閲忕殑缂╃暐鍥惧睍绀猴紝闄嶄綆鏈湴瀛樺偍鍘嬪姏
+- 鎷栧洖鐢诲竷鏃朵紭鍏堜娇鐢ㄥ師鍥撅紝鑰屼笉鏄缉鐣ュ浘
+- 澧炲己浜?`localStorage` 瓒呴鏃剁殑闄嶇骇澶勭悊锛岄伩鍏嶉〉闈㈠洜瀛樺偍瓒呴檺鐩存帴宕╂簝
 
----
+### 4. 鎻愮ず璇嶄紭鍖栭摼璺寮?
+- 寮曞叆鏇磋创鍚堝浘鍍忕敓鎴愬満鏅殑鎻愮ず璇嶅寮洪€昏緫
+- 澧炲姞璁板繂妫€绱笌鍘嗗彶楂樺垎鏍锋湰澶嶇敤鑳藉姏
+- 浼樺寲鎻愮ず璇嶆椂鏇村己璋冿細
+  - 涓讳綋
+  - 鍦烘櫙
+  - 鏋勫浘
+  - 闀滃ご
+  - 鍏夌嚎
+  - 鏉愯川
+  - 椋庢牸绾︽潫
+- 鍙傝€?[Nano Prompts](https://nanoprompts.org/) 鐨勫叕寮€鍐欎綔鎬濊矾锛屽涓枃鍥惧儚鎻愮ず璇嶅仛鏇存湁閽堝鎬х殑缁撴瀯鍖栧寮?
+### 5. 鍘昏儗鏅兘鍔涗紭鍖?
+- 灏嗗幓鑳屾櫙鑳藉姏鏀舵暃涓哄崟涓€鏍稿績娴佺▼锛岄伩鍏嶆ā寮忚繃澶氶€犳垚浣跨敤璐熸媴
+- 浼樺厛閲囩敤鏈湴澶勭悊锛屽け璐ユ椂鑷姩鍥為€€
+- 鎻愬崌绋冲畾鎬э紝鍑忓皯鐩存帴鎶ラ敊涓柇
 
-## 🚀 Quick Start
+### 6. 涓枃鐣岄潰涓庢枃妗堜慨姝?
+- 淇澶氬涔辩爜涓庣紪鐮佸紓甯?- 缁熶竴閮ㄥ垎鍘嗗彶璁板綍銆侀潰鏉胯鏄庛€佹搷浣滄彁绀轰负涓枃
+- 璋冩暣鍘嗗彶璁板綍鍗＄墖灏哄涓庢帓鐗堬紝閫傞厤鏇寸揣鍑戠殑鍙充晶鏍忓竷灞€
 
-### Prerequisites
+## 鍔熻兘姒傝
 
-- **Node.js** ≥ 18
-- A Gemini API Key ([get one here](https://aistudio.google.com/apikey))
+- 鏃犻檺鐢诲竷鍒涗綔
+- 鏂囩敓鍥?/ 鍥剧敓鍥?- 澶氭ā鍨嬪垏鎹?- 鍙傝€冨浘宸ヤ綔娴?- 鍘嗗彶鐢熸垚绠＄悊
+- 鍥剧墖鎷栨嫿鍥炵敾甯?- 鍘昏儗鏅?- 瑙掕壊閿佸畾涓庣礌鏉愬鐢?
+## 鎶€鏈爤
 
-### Install & Run
+- React 19
+- TypeScript 5
+- Vite 6
+- Tiptap
+- `@google/genai`
+- `@imgly/background-removal`
+- `onnxruntime-web`
+
+## 鏈湴鍚姩
 
 ```bash
-# Clone
-git clone https://github.com/Paker-kk/MakingLovart.git
-cd MakingLovart
-
-# Install dependencies
+git clone https://github.com/1831314610wzz-coder/Air-studio.git
+cd Air-studio
 npm install
-
-# Configure your API key
-cp env.example .env
-# Edit .env and add your GEMINI_API_KEY
-
-# Start dev server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and start creating 🎉
+榛樿寮€鍙戝湴鍧€锛?
+- [http://localhost:3001](http://localhost:3001)
 
----
+## 鐜鍙橀噺璇存槑
 
-## 🎯 Features
-
-### 🖌️ Infinite Canvas
-- 无限缩放与平移的白板画布
-- 自由绘制、形状、文字、箭头、线条等基础工具
-- 多元素选择、对齐辅助线、图层管理
-- 亮色 / 暗色主题自适应
-
-### 🤖 AI-Powered Generation
-- **文生图**: 输入提示词，Gemini / DALL-E / SDXL 直接生成图片到画布
-- **图生图**: 选中画布上的图片 + 提示词 → AI 编辑
-- **文生视频**: Veo 2.0 视频生成，支持 16:9 / 9:16
-- **首尾帧动画**: 选中或 @引用起始帧图片，Veo 自动生成过渡动画视频
-- **LLM 提示词润色**: 一键开关自动润色，生成前用 AI 优化你的提示词
-
-### 📎 @Mention 引用系统
-- 在输入框中 `@` 引用画布上的任意元素
-- @引用的图片自动作为参考图注入生成流程
-- 视频模式下优先使用选中图片或首张 @引用图片作为参考帧
-
-### 🔑 多 Provider API 管理
-- 支持 **Google (Gemini/Imagen/Veo)**、**OpenAI (GPT/DALL-E)**、**Anthropic (Claude)**、**Stability (SDXL)**、**Qwen**、**Banana** 等多家 AI 服务
-- 按 Provider 自动推断可用模型，底部输入栏只显示已配置的模型
-- API Key 验证 + 状态指示 + 生成前预检
-
-### 🎭 角色锁定 (Character Lock)
-- 选中一张角色图片 → 锁定为参考角色
-- 后续生成自动注入角色描述，保持面部、发型、服装、体态一致性
-
-### 📦 素材库 & 灵感面板
-- 角色 / 场景 / 道具分类素材管理
-- 生成历史自动记录
-- 一键将素材拖入画布
-
-### 🛠️ 更多能力
-- 多画板管理，自由切换工作空间
-- 右键菜单快捷操作
-- 拖拽 / 粘贴上传参考图
-- 效果预设保存与复用
-- 国际化 (中/英双语)
-
----
-
-## 🏗️ Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Framework** | React 19 + TypeScript 5.8 |
-| **Build** | Vite 6 |
-| **Rich Text** | Tiptap 3 (@mention, suggestion) |
-| **AI SDK** | @google/genai (Gemini, Imagen, Veo) |
-| **Multi-Provider** | OpenAI, Anthropic, Stability, Qwen, Banana |
-| **Styling** | Tailwind CSS + CSS Custom Properties |
-| **Deployment** | Docker + Nginx / Vercel / Static |
-
----
-
-## 📁 Project Structure
-
-```
-MakingLovart/
-├── App.tsx                    # 主应用（画布、状态、生成逻辑）
-├── index.tsx                  # 入口文件
-├── types.ts                   # 全局类型定义
-├── translations.ts            # 国际化文案（中/英双语）
-├── styles.css                 # 全局样式 & CSS 变量（亮色/暗色主题）
-├── components/
-│   ├── PromptBar.tsx          # 底部智能输入栏（模式切换、模型选择、@mention）
-│   ├── Toolbar.tsx            # 左侧工具栏（绘制、形状、文字等）
-│   ├── WorkspaceSidebar.tsx   # 左侧面板（画板管理 + 图层面板）
-│   ├── RightPanel.tsx         # 右侧面板（生成设置 + 灵感/素材库）
-│   ├── CanvasSettings.tsx     # 设置面板 & API Key 管理
-│   ├── LayerPanel.tsx         # 图层管理面板
-│   ├── InspirationPanel.tsx   # 灵感 & 历史面板
-│   ├── AssetLibraryPanel.tsx  # 素材库面板
-│   ├── BoardPanel.tsx         # 画板管理面板
-│   ├── RichPromptEditor.tsx   # Tiptap 富文本编辑器
-│   ├── CanvasMentionExtension.tsx  # @mention 扩展
-│   ├── MentionList.tsx        # @mention 下拉列表
-│   ├── QuickPrompts.tsx       # 快捷提示词模板
-│   ├── NodeWorkflowPanel.tsx  # 节点工作流面板
-│   ├── ConfigManager/         # API Key 配置管理组件
-│   └── nodeflow/              # 节点编辑器内核
-├── services/
-│   ├── geminiService.ts       # Google Gemini/Imagen/Veo API 封装
-│   ├── aiGateway.ts           # 多 Provider 路由网关
-│   └── bananaService.ts       # Banana Vision Agent
-├── utils/
-│   ├── assetStorage.ts        # 素材持久化（localStorage）
-│   ├── fileUtils.ts           # 文件处理工具
-│   ├── generationHistory.ts   # 生成历史管理
-│   └── uiScale.ts            # 响应式 UI 缩放指标
-├── tests/                     # 自动化测试
-│   ├── aiGateway.test.ts
-│   ├── aiGatewayValidation.test.ts
-│   ├── geminiService.test.ts
-│   ├── generationHistory.test.ts
-│   └── types.test.ts
-├── Dockerfile                 # 多阶段 Docker 构建
-├── docker-compose.yml         # Docker Compose 编排
-└── nginx.conf                 # Nginx 生产配置
-```
-
----
-
-## 🐳 Deployment
-
-### Docker (推荐)
-
-```bash
-# 一键启动
-docker-compose up -d
-
-# 访问
-open http://localhost:3000
-```
-
-### Static Build
-
-```bash
-npm run build
-# 产物在 dist/ 目录，部署到任意静态服务
-```
-
-### Vercel / Netlify
-
-直接连接 GitHub 仓库即可自动部署，零配置。
-
-> 📖 详细部署指南请参考 [DOCKER_GUIDE.md](./DOCKER_GUIDE.md)
-
----
-
-## ⚙️ Configuration
-
-在项目根目录创建 `.env` 文件:
-
+璇峰湪椤圭洰鏍圭洰褰曞垱寤?`.env` 鎴?`.env.local`锛屾寜浣犵殑瀹為檯 API 鏈嶅姟濉啓銆?
+绀轰緥锛?
 ```env
-# Required: Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Alternative: Vite-prefixed (auto-exposed to client)
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=your_key_here
+VITE_GEMINI_API_KEY=your_key_here
 ```
 
-更多 Provider 的 API Key 可在应用内 **设置 → API 配置** 中动态添加。
+濡傛灉浣犳帴鍏ヤ簡鑷畾涔?LLM銆佺敓鍥炬垨瑙嗛鏈嶅姟锛屼篃璇峰皢瀵瑰簲瀵嗛挜鍐欏叆鏈湴鐜鍙橀噺鏂囦欢锛屼笉瑕佺洿鎺ュ啓鍏ユ簮鐮併€?
+## API Key 瀹夊叏璇存槑
 
----
+涓洪伩鍏嶅瘑閽ユ硠闇诧紝鏈」鐩害瀹氾細
 
-## 🤝 Contributing
+- `.env`
+- `.env.local`
+- `.env.*`
 
-我们欢迎所有形式的贡献！
+鍧囦笉鎻愪氦鍒扮増鏈簱銆?
+濡傛灉浣犺鍒嗕韩鎴栨帹閫佷唬鐮侊紝璇峰厛纭锛?
+1. API Key 娌℃湁纭紪鐮佸湪 `ts`銆乣tsx`銆乣js`銆乣json` 鏂囦欢涓?2. `.env` 鏂囦欢鏈 git 璺熻釜
+3. README銆佹埅鍥俱€佹姤閿欐棩蹇椾腑娌℃湁鏆撮湶鐪熷疄瀵嗛挜
 
-1. **Fork** 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 打开 **Pull Request**
+## 涓庡師椤圭洰鐨勫叧绯昏鏄?
+濡傛灉浣犳槸浠庡師椤圭洰浜嗚В骞舵潵鍒拌繖涓粨搴擄紝璇锋敞鎰忥細
 
-> 📖 详细贡献指南请参考 [CONTRIBUTING.md](./CONTRIBUTING.md)
->
-> 📖 行为准则请参考 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+- 杩欐槸鍩轰簬 `MakingLovart` 鐨勪慨鏀逛紭鍖栫増鏈?- 鏈粨搴撻噸鐐瑰湪浜庡疄闄呭彲鐢ㄦ€с€佺ǔ瀹氭€у拰涓枃鍒涗綔娴佺▼浼樺寲
+- 鑻ヤ綘鎯充簡瑙ｅ師濮嬭璁℃€濊矾銆佹渶鍒濆姛鑳界粨鏋勪笌涓婃父鏇存柊锛岃浼樺厛鏌ョ湅鍘熶粨搴擄細
+  [https://github.com/Paker-kk/MakingLovart](https://github.com/Paker-kk/MakingLovart)
 
----
-
-## � Acknowledgments
-
-本项目受到以下优秀项目的启发：
-
-- **[BananaPod](https://github.com/ZHO-ZHO-ZHO/BananaPod)** — AI 视觉智能体
-- **[LOVART](https://lovart.ai)** — AI 创意设计平台
-
----
-
-## ⭐ Star
-
-如果这个项目对你有帮助，**欢迎给我一个 Star** ⭐，谢谢！这对我真的很重要！
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Paker-kk/MakingLovart&type=Date)](https://star-history.com/#Paker-kk/MakingLovart&Date)
-
----
-
-## �📄 License
-
-本项目基于 [Apache License 2.0](./LICENSE) 开源。
-
----
-
-## Recent Changes (2026-03-20)
-
-- Background removal is now a one-click flow with local-first processing and automatic remote fallback.
-- Generation history now stores compressed thumbnails for panel display to improve retention count.
-- Dragging an item from generation history back to canvas now prefers the original image source (not thumbnail).
-- Right-side Generate panel no longer supports reference image import; references are added only from the bottom prompt bar.
-- Development server default port is set to `3001` for consistent local access.
+## 寮€婧愬崗璁?
+璇蜂互浠撳簱涓殑 `LICENSE` 涓哄噯锛屽苟鍦ㄤ簩娆″垎鍙戞垨鍐嶄慨鏀规椂閬靛惊瀵瑰簲鍗忚瑕佹眰銆?
