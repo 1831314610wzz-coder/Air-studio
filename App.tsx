@@ -593,7 +593,105 @@ type RuntimeIssue = {
     timestamp: number;
 };
 
+type AuthState = {
+    checked: boolean;
+    enabled: boolean;
+    authenticated: boolean;
+    username: string | null;
+    error: string | null;
+};
+
+const initialAuthState: AuthState = {
+    checked: false,
+    enabled: false,
+    authenticated: false,
+    username: null,
+    error: null,
+};
+
+const AuthScreen: React.FC<{
+    loading: boolean;
+    error: string | null;
+    onSubmit: (payload: { username: string; password: string }) => Promise<void>;
+}> = ({ loading, error, onSubmit }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        await onSubmit({ username, password });
+    };
+
+    return (
+        <div className="min-h-screen bg-[#0B0F16] px-6 py-10 text-white">
+            <div className="mx-auto flex min-h-[80vh] max-w-5xl items-center justify-center">
+                <div className="grid w-full gap-8 md:grid-cols-[1.2fr_0.8fr]">
+                    <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-10 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
+                        <div className="mb-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                            Air Studio Internal Access
+                        </div>
+                        <h1 className="text-4xl font-semibold tracking-tight">内部访问登录</h1>
+                        <p className="mt-4 max-w-xl text-sm leading-7 text-white/70">
+                            这个站点已限制为内部成员使用。请使用管理员分配的账号登录，登录成功后才可进入画布与模型工作流。
+                        </p>
+                        <div className="mt-8 grid gap-4 text-sm text-white/75 sm:grid-cols-3">
+                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">支持内部账号口令控制</div>
+                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">登录状态通过安全 Cookie 维持</div>
+                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">适合部署在 Vercel 的内部工作入口</div>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="rounded-[28px] border border-white/10 bg-white p-8 text-[#111827] shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
+                        <h2 className="text-2xl font-semibold">登录</h2>
+                        <p className="mt-2 text-sm text-[#667085]">输入内部账号与密码后进入系统。</p>
+
+                        <div className="mt-8 space-y-4">
+                            <label className="block">
+                                <div className="mb-2 text-sm font-medium text-[#344054]">账号</div>
+                                <input
+                                    value={username}
+                                    onChange={event => setUsername(event.target.value)}
+                                    className="w-full rounded-2xl border border-[#D0D5DD] px-4 py-3 outline-none transition focus:border-[#84ADFF] focus:ring-4 focus:ring-[#EEF4FF]"
+                                    placeholder="请输入账号"
+                                    autoComplete="username"
+                                />
+                            </label>
+                            <label className="block">
+                                <div className="mb-2 text-sm font-medium text-[#344054]">密码</div>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={event => setPassword(event.target.value)}
+                                    className="w-full rounded-2xl border border-[#D0D5DD] px-4 py-3 outline-none transition focus:border-[#84ADFF] focus:ring-4 focus:ring-[#EEF4FF]"
+                                    placeholder="请输入密码"
+                                    autoComplete="current-password"
+                                />
+                            </label>
+                        </div>
+
+                        {error && (
+                            <div className="mt-4 rounded-2xl border border-[#FECDCA] bg-[#FEF3F2] px-4 py-3 text-sm text-[#B42318]">
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading || !username.trim() || !password}
+                            className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-[#111827] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#1F2937] disabled:cursor-not-allowed disabled:bg-[#D0D5DD]"
+                        >
+                            {loading ? '登录中...' : '进入 Air Studio'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const App: React.FC = () => {
+    const [authState, setAuthState] = useState<AuthState>(initialAuthState);
+    const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
     const [boards, setBoards] = useState<Board[]>(() => loadBoardsFromStorage());
     const [activeBoardId, setActiveBoardId] = useState<string>(() => {
         try {
@@ -761,6 +859,101 @@ const App: React.FC = () => {
     const [isAutoEnhanceEnabled, setIsAutoEnhanceEnabled] = useState<boolean>(() => {
         try { return localStorage.getItem('autoEnhance.v1') === 'true'; } catch { return false; }
     });
+
+    const refreshAuthSession = useCallback(async () => {
+        try {
+            const response = await fetch('/api/auth/session', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            setAuthState({
+                checked: true,
+                enabled: !!data?.enabled,
+                authenticated: !!data?.authenticated,
+                username: data?.username || null,
+                error: null,
+            });
+        } catch (sessionError) {
+            const isLocalDev = typeof window !== 'undefined'
+                && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            if (isLocalDev) {
+                setAuthState({
+                    checked: true,
+                    enabled: false,
+                    authenticated: true,
+                    username: null,
+                    error: null,
+                });
+                return;
+            }
+            setAuthState({
+                checked: true,
+                enabled: true,
+                authenticated: false,
+                username: null,
+                error: '登录状态检查失败，请稍后重试。',
+            });
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshAuthSession();
+    }, [refreshAuthSession]);
+
+    const handleAuthLogin = useCallback(async ({ username, password }: { username: string; password: string }) => {
+        setIsAuthSubmitting(true);
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data?.message || '登录失败，请检查账号密码。');
+            }
+            setAuthState({
+                checked: true,
+                enabled: !!data?.enabled,
+                authenticated: !!data?.authenticated,
+                username: data?.username || null,
+                error: null,
+            });
+        } catch (loginError) {
+            setAuthState(prev => ({
+                ...prev,
+                checked: true,
+                error: loginError instanceof Error ? loginError.message : '登录失败，请稍后重试。',
+            }));
+        } finally {
+            setIsAuthSubmitting(false);
+        }
+    }, []);
+
+    const handleAuthLogout = useCallback(async () => {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include',
+            });
+        } finally {
+            setAuthState({
+                checked: true,
+                enabled: true,
+                authenticated: false,
+                username: null,
+                error: null,
+            });
+        }
+    }, []);
 
     // 鈹€鈹€ API 閰嶇疆绠＄悊 Store 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     const apiConfigStore = useAPIConfigStore();
@@ -3533,8 +3726,34 @@ const App: React.FC = () => {
         return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fullSvg)))}`;
     }, []);
 
+    if (!authState.checked) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-[#0B0F16] text-white">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm text-white/80">
+                    正在检查登录状态...
+                </div>
+            </div>
+        );
+    }
+
+    if (authState.enabled && !authState.authenticated) {
+        return <AuthScreen loading={isAuthSubmitting} error={authState.error} onSubmit={handleAuthLogin} />;
+    }
+
     return (
         <div className="theme-aware w-screen h-screen flex flex-col font-sans" style={{ backgroundColor: themePalette.appBackground }} onDragOver={handleDragOver} onDrop={handleDrop}>
+            {authState.enabled && authState.authenticated && (
+                <div className="fixed right-4 top-16 z-[120] flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-3 py-2 text-xs text-white shadow-lg backdrop-blur">
+                    <span className="max-w-[160px] truncate">内部账号：{authState.username}</span>
+                    <button
+                        type="button"
+                        onClick={handleAuthLogout}
+                        className="rounded-full border border-white/10 px-2.5 py-1 transition hover:bg-white/10"
+                    >
+                        退出
+                    </button>
+                </div>
+            )}
             {isLoading && <Loader progressMessage={progressMessage} />}
             {error && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
