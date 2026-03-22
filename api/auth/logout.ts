@@ -1,17 +1,23 @@
 import { getLogoutCookie } from './_shared';
 
-export const config = {
-    runtime: 'nodejs',
-};
+export const runtime = 'nodejs';
 
-export default function handler(_req: any, res: any) {
+export async function POST() {
     try {
-        res.setHeader('Set-Cookie', getLogoutCookie());
-        return res.status(200).json({ ok: true });
+        const response = Response.json({ ok: true });
+        response.headers.set('Set-Cookie', getLogoutCookie());
+        return response;
     } catch (error) {
-        return res.status(500).json({
-            ok: false,
-            message: error instanceof Error ? error.message : 'logout handler failed',
-        });
+        return Response.json(
+            {
+                ok: false,
+                message: error instanceof Error ? error.message : 'logout handler failed',
+            },
+            { status: 500 },
+        );
     }
+}
+
+export async function GET() {
+    return Response.json({ message: 'Method not allowed' }, { status: 405 });
 }

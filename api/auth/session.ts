@@ -1,32 +1,33 @@
 import { getSessionFromCookieHeader, isAuthEnabled } from './_shared';
 
-export const config = {
-    runtime: 'nodejs',
-};
+export const runtime = 'nodejs';
 
-export default function handler(req: any, res: any) {
+export async function GET(request: Request) {
     try {
         const enabled = isAuthEnabled();
         if (!enabled) {
-            return res.status(200).json({
+            return Response.json({
                 enabled: false,
                 authenticated: true,
                 username: null,
             });
         }
 
-        const session = getSessionFromCookieHeader(req.headers.cookie);
-        return res.status(200).json({
+        const session = getSessionFromCookieHeader(request.headers.get('cookie') || undefined);
+        return Response.json({
             enabled: true,
             authenticated: !!session,
             username: session?.username || null,
         });
     } catch (error) {
-        return res.status(500).json({
-            enabled: true,
-            authenticated: false,
-            username: null,
-            message: error instanceof Error ? error.message : 'session handler failed',
-        });
+        return Response.json(
+            {
+                enabled: true,
+                authenticated: false,
+                username: null,
+                message: error instanceof Error ? error.message : 'session handler failed',
+            },
+            { status: 500 },
+        );
     }
 }
