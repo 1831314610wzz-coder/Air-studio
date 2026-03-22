@@ -1,23 +1,13 @@
-import { getLogoutCookie } from './_shared';
+const COOKIE_NAME = 'airstudio_user';
 
-export const runtime = 'nodejs';
-
-export async function POST() {
+export default function handler(_req: any, res: any) {
     try {
-        const response = Response.json({ ok: true });
-        response.headers.set('Set-Cookie', getLogoutCookie());
-        return response;
+        res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`);
+        return res.status(200).json({ ok: true });
     } catch (error) {
-        return Response.json(
-            {
-                ok: false,
-                message: error instanceof Error ? error.message : 'logout handler failed',
-            },
-            { status: 500 },
-        );
+        return res.status(500).json({
+            ok: false,
+            message: error instanceof Error ? error.message : 'logout handler failed',
+        });
     }
-}
-
-export async function GET() {
-    return Response.json({ message: 'Method not allowed' }, { status: 405 });
 }
