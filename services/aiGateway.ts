@@ -700,11 +700,23 @@ export async function enhancePromptWithAgentPipeline(
  * @param model  - 妯″瀷鍚嶇О
  * @param key    - 鐢ㄦ埛 API Key
  */
+function extractInlineImageData(image: { href: string; mimeType: string }): { data: string; mimeType: string } | null {
+    const href = image.href || '';
+    const dataUrlMatch = href.match(/^data:([^;]+);base64,(.+)$/i);
+    if (dataUrlMatch) {
+        return {
+            data: dataUrlMatch[2],
+            mimeType: image.mimeType || dataUrlMatch[1] || 'image/png',
+        };
+    }
+    return null;
+}
+
 export async function generateImageWithProvider(
     prompt: string,
     model: string,
     key?: UserApiKey,
-    options?: { size?: string; aspectRatio?: string; resolution?: string }
+    options?: { size?: string; aspectRatio?: string; resolution?: string; referenceImages?: { href: string; mimeType: string }[] }
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; newImageUrl: string | null; textResponse: string | null }> {
     const provider = inferProviderFromModel(model);
     const requestedSize = options?.size || '1024x1024';
@@ -726,6 +738,12 @@ export async function generateImageWithProvider(
             const imageSize = mapResolutionToApiyiImageSize(options?.resolution || requestedSize);
             const aspectRatio = normalizeApiyiAspectRatio(options?.aspectRatio);
             const origin = getApiyiOrigin(baseUrl);
+            const referenceImages = (options?.referenceImages || [])
+                .map(extractInlineImageData)
+                .filter((item): item is { data: string; mimeType: string } => !!item);
+            const parts = referenceImages.length > 0
+                ? [...referenceImages.map(image => ({ inlineData: image })), { text: prompt }]
+                : [{ text: prompt }];
 
             const response = await fetch(`${origin}/v1beta/models/${encodeURIComponent(nativeModel)}:generateContent`, {
                 method: 'POST',
@@ -734,7 +752,7 @@ export async function generateImageWithProvider(
                     Authorization: `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
+                    contents: [{ parts }],
                     generationConfig: {
                         responseModalities: ['IMAGE'],
                         imageConfig: {

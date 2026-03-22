@@ -2628,8 +2628,13 @@ const App: React.FC = () => {
         const activeAttachments = source === 'right' ? chatAttachments : promptAttachments;
         const attachmentReferenceImages = activeAttachments.map(item => ({ href: item.href, mimeType: item.mimeType }));
         const imageProvider = inferProviderFromModel(modelPreference.imageModel);
+        const preferredImageKey = getPreferredApiKey('image', imageProvider);
         const videoProvider = inferProviderFromModel(modelPreference.videoModel);
-        const supportsReferenceEditing = imageProvider === 'google';
+        const supportsReferenceEditing =
+            imageProvider === 'google'
+            || (imageProvider === 'custom'
+                && !!preferredImageKey?.baseUrl
+                && preferredImageKey.baseUrl.toLowerCase().includes('api.apiyi.com'));
         const imageOutputName = generationMode === 'keyframe' ? 'Keyframe' : 'Generated Image';
 
         /**
@@ -2954,10 +2959,20 @@ const App: React.FC = () => {
 
                 // Append @mentioned reference images 鈥?鎸?prompt 涓嚭鐜伴『搴忔帓鍒?
                 const { prompt: mentionPrompt, orderedMentionImages } = buildMentionAwarePrompt(effectivePrompt, effectiveMentionedImageElements);
-                const result = await editImage(
-                    [...imagesToProcess, ...orderedMentionImages, ...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages],
-                    mentionPrompt
-                );
+                const referenceImages = [...imagesToProcess, ...orderedMentionImages, ...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages];
+                const result = imageProvider === 'google'
+                    ? await editImage(referenceImages, mentionPrompt)
+                    : await generateImageWithProvider(
+                        mentionPrompt,
+                        modelPreference.imageModel,
+                        preferredImageKey,
+                        {
+                            size: buildImageSizeByRatio(imageResolution, imageAspectRatio),
+                            aspectRatio: imageAspectRatio,
+                            resolution: imageResolution,
+                            referenceImages,
+                        }
+                    );
 
                 if ((result.newImageBase64 && result.newImageMimeType) || result.newImageUrl) {
                     const imageSrc = result.newImageUrl || `data:${result.newImageMimeType};base64,${result.newImageBase64}`;
@@ -3005,7 +3020,20 @@ const App: React.FC = () => {
                 // No canvas selection, but user @mentioned image elements 鈥?鎸?prompt 寮曠敤椤哄簭鎺掑垪
                 setProgressMessage('Generating with reference images...');
                 const { prompt: mentionPrompt2, orderedMentionImages: orderedRefs } = buildMentionAwarePrompt(effectivePrompt, effectiveMentionedImageElements);
-                const result = await editImage([...orderedRefs, ...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages], mentionPrompt2);
+                const referenceImages = [...orderedRefs, ...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages];
+                const result = imageProvider === 'google'
+                    ? await editImage(referenceImages, mentionPrompt2)
+                    : await generateImageWithProvider(
+                        mentionPrompt2,
+                        modelPreference.imageModel,
+                        preferredImageKey,
+                        {
+                            size: buildImageSizeByRatio(imageResolution, imageAspectRatio),
+                            aspectRatio: imageAspectRatio,
+                            resolution: imageResolution,
+                            referenceImages,
+                        }
+                    );
 
                 if (result.newImageBase64 && result.newImageMimeType) {
                     const { newImageBase64, newImageMimeType } = result;
@@ -3052,11 +3080,23 @@ const App: React.FC = () => {
                 const baseRefs = [...effectiveAttachmentReferenceImages, ...effectiveCharacterReferenceImages];
                 const requestedImageSize = buildImageSizeByRatio(imageResolution, imageAspectRatio);
                 const result = baseRefs.length > 0
-                    ? await editImage(baseRefs, effectivePrompt)
+                    ? imageProvider === 'google'
+                        ? await editImage(baseRefs, effectivePrompt)
+                        : await generateImageWithProvider(
+                            effectivePrompt,
+                            modelPreference.imageModel,
+                            preferredImageKey,
+                            {
+                                size: requestedImageSize,
+                                aspectRatio: imageAspectRatio,
+                                resolution: imageResolution,
+                                referenceImages: baseRefs,
+                            }
+                        )
                     : await generateImageWithProvider(
                         effectivePrompt,
                         modelPreference.imageModel,
-                        getPreferredApiKey('image', imageProvider),
+                        preferredImageKey,
                         {
                             size: requestedImageSize,
                             aspectRatio: imageAspectRatio,
