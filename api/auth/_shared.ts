@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import { createHmac } from 'node:crypto';
 
 type AuthUser = {
     username: string;
@@ -51,7 +51,7 @@ export function validateCredentials(username: string, password: string): boolean
 }
 
 function sign(value: string): string {
-    return crypto.createHmac('sha256', getSessionSecret()).update(value).digest('hex');
+    return createHmac('sha256', getSessionSecret()).update(value).digest('hex');
 }
 
 export function createSessionToken(username: string): string {
